@@ -27,6 +27,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
+import com.rackspace.salus.telemetry.model.NodeConnectionStatus;
 import com.rackspace.salus.telemetry.model.NodeInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Service;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -55,6 +57,8 @@ public class EnvoyNodeManagement {
     /**
      * Creates the /active and /expected keys within etcd for the connected envoy.
      * /active is created using a lease, whereas /expected will live forever.
+     *
+     * Also creates a key under /tenants/../identifiers with no lease specified.
      *
      * @param tenantId The tenant used to authenticate the the envoy.
      * @param envoyId The auto-generated unique string associated to the envoy.
@@ -81,6 +85,10 @@ public class EnvoyNodeManagement {
                 .setTenantId(tenantId)
                 .setAddress((InetSocketAddress) remoteAddr);
 
+        NodeConnectionStatus nodeStatus = new NodeConnectionStatus()
+                .setConnected(true)
+                .setLastConnectedTime(new Date());
+
         final String nodeKeyHash = hashing.hash(nodeKey);
         final ByteSequence nodeInfoBytes;
         try {
@@ -89,8 +97,18 @@ public class EnvoyNodeManagement {
             throw new RuntimeException("Failed to marshal NodeInfo", e);
         }
 
+        final ByteSequence nodeStatusBytes;
+        try {
+            nodeStatusBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(nodeStatus));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to marshal NodeConnectionStatus", e);
+        }
+
         return etcd.getKVClient().put(
                 buildKey(Keys.FMT_NODES_EXPECTED, nodeKeyHash), nodeInfoBytes)
+                .thenCompose(putResponse ->
+                        etcd.getKVClient().put(
+                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue), nodeStatusBytes))
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
                                 buildKey(Keys.FMT_NODES_ACTIVE, nodeKeyHash), nodeInfoBytes, putLeaseOption));
