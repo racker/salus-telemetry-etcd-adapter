@@ -223,11 +223,7 @@ public class EnvoyLabelManagementTest {
         verify(kv).put(
                 eq(ByteSequence.fromString(k)),
                 eq(ByteSequence.fromString(v)),
-                argThat(putOption -> {
-                    return putOption.getLeaseId() == leaseId;
-                })
-            );
-      
+                argThat(putOption -> putOption.getLeaseId() == leaseId));
     }
 
     @Test

@@ -39,4 +39,6 @@ public class Keys {
         "/{selectorScope}/{tenant}/{agentConfigId}/{envoyInstanceId}";
     public static final Pattern PTN_APPLIED_CONFIGS = Pattern.compile(
         "/appliedConfigs/(?<scope>.+?)/(?<tenant>.+?)/(?<agentConfigId>.+?)/(?<envoyInstanceId>.+?)");
+    public static final String FMT_NODES_ACTIVE = "/nodes/active/{md5OfTenantAndIdentifierValue}";
+    public static final String FMT_NODES_EXPECTED = "/nodes/expected/{md5OfTenantAndIdentifierValue}";
 }
