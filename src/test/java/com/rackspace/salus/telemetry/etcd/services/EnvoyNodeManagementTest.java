@@ -132,13 +132,14 @@ public class EnvoyNodeManagementTest {
         verifyNodeInfoPut("/nodes/expected/" + nodeKeyHash, nodeInfo, null);
         verifyIdentifierPut(identifierPath, startedDate);
 
-        when(kv.delete(argThat(t -> t.toStringUtf8().startsWith("/nodes"))))
+        when(kv.delete(argThat(t -> t.toStringUtf8().startsWith("/"))))
                 .thenReturn(completedDeletedResponse());
 
         envoyNodeManagement.removeNode(tenantId, identifier, identifierValue).join();
 
         verifyDelete("/nodes/active/" + nodeKeyHash);
         verifyDelete("/nodes/expected/" + nodeKeyHash);
+        verifyDelete(identifierPath);
     }
 
     private void verifyNodeInfoPut(String k, NodeInfo v, Long leaseId) {

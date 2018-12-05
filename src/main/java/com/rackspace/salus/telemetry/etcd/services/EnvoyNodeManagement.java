@@ -129,6 +129,9 @@ public class EnvoyNodeManagement {
                 buildKey(Keys.FMT_NODES_EXPECTED, nodeKeyHash))
                 .thenCompose(delResponse ->
                         etcd.getKVClient().delete(
-                                buildKey(Keys.FMT_NODES_ACTIVE, nodeKeyHash)));
+                                buildKey(Keys.FMT_NODES_ACTIVE, nodeKeyHash)))
+                .thenCompose(delResponse ->
+                        etcd.getKVClient().delete(
+                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue)));
     }
 }
