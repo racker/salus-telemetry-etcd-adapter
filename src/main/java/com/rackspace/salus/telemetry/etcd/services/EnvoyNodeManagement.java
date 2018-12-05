@@ -22,6 +22,8 @@ import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 
 import com.coreos.jetcd.Client;
 import com.coreos.jetcd.data.ByteSequence;
+import com.coreos.jetcd.kv.GetResponse;
+import com.coreos.jetcd.options.GetOption;
 import com.coreos.jetcd.options.PutOption;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -67,7 +69,7 @@ public class EnvoyNodeManagement {
                                              String identifier, Map<String, String> envoyLabels,
                                              SocketAddress remoteAddr) {
         final PutOption putLeaseOption = PutOption.newBuilder()
-                .withLeaseId(leaseId)
+                //GBJFIX .withLeaseId(leaseId)
                 .build();
 
         String identifierValue = envoyLabels.get(identifier);
@@ -93,5 +95,11 @@ public class EnvoyNodeManagement {
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
                                 buildKey(Keys.FMT_NODES_ACTIVE, nodeKeyHash), nodeInfoBytes, putLeaseOption));
+    }
+    public CompletableFuture<GetResponse> getNodesInRange(String prefix, String min, String max) {
+
+        return etcd.getKVClient().get(buildKey(prefix, min),
+                GetOption.newBuilder().withRange(buildKey(prefix, max)).build());
+
     }
 }
