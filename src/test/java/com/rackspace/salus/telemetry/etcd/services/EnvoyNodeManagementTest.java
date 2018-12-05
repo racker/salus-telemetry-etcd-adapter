@@ -19,6 +19,7 @@
 package com.rackspace.salus.telemetry.etcd.services;
 
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.completedPutResponse;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -32,12 +33,12 @@ import com.coreos.jetcd.data.ByteSequence;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
-import java.net.SocketAddress;
 
 import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
 import com.rackspace.salus.telemetry.model.NodeInfo;
@@ -118,11 +119,11 @@ public class EnvoyNodeManagementTest {
 
         envoyNodeManagement.registerNode(tenantId, envoyId, leaseId, identifier, envoyLabels, address).join();
 
-        verifyPut("/nodes/active/" + nodeKeyHash, nodeInfo, leaseId);
-        verifyPut("/nodes/expected/" + nodeKeyHash, nodeInfo, null);
+        verifyNodeInfoPut("/nodes/active/" + nodeKeyHash, nodeInfo, leaseId);
+        verifyNodeInfoPut("/nodes/expected/" + nodeKeyHash, nodeInfo, null);
     }
 
-    private void verifyPut(String k, NodeInfo v, Long leaseId) {
+    private void verifyNodeInfoPut(String k, NodeInfo v, Long leaseId) {
         ByteSequence valueBytes;
         try {
             valueBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(v));
@@ -134,7 +135,24 @@ public class EnvoyNodeManagementTest {
         if (leaseId != null) {
             verify(kv).put(
                     eq(ByteSequence.fromString(k)),
-                    eq(valueBytes),
+                    argThat(value -> {
+                        byte[] nodeInfoBytes = value.getBytes();
+                        NodeInfo nodeInfo;
+                        try {
+                            nodeInfo = objectMapper.readValue(nodeInfoBytes, NodeInfo.class);
+                        } catch (IOException e) {
+                            assertNull(e);
+                            return false;
+                        }
+                        assertEquals(v.getEnvoyId(), nodeInfo.getEnvoyId());
+                        assertEquals(v.getIdentifier(), nodeInfo.getIdentifier());
+                        assertEquals(v.getIdentifierValue(), nodeInfo.getIdentifierValue());
+                        assertEquals(v.getTenantId(), nodeInfo.getTenantId());
+                        assertEquals(v.getAddress().getHostName(), nodeInfo.getAddress().getHostName());
+                        assertEquals(v.getAddress().getPort(), nodeInfo.getAddress().getPort());
+                        assertEquals(v.getLabels().size(), nodeInfo.getLabels().size());
+                        return true;
+                    }),
                     argThat(putOption -> putOption.getLeaseId() == leaseId));
         } else {
             verify(kv).put(
