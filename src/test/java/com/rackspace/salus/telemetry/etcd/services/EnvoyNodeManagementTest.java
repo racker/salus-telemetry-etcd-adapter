@@ -22,6 +22,7 @@ import static com.rackspace.salus.telemetry.etcd.EtcdUtils.completedDeletedRespo
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.completedPutResponse;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -38,10 +39,12 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
 import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
+import com.rackspace.salus.telemetry.model.NodeConnectionStatus;
 import com.rackspace.salus.telemetry.model.NodeInfo;
 import org.junit.Before;
 import org.junit.Test;
@@ -85,6 +88,7 @@ public class EnvoyNodeManagementTest {
 
     @Test
     public void testRegisterAndRemove() {
+        Date startedDate = new Date();
         Map<String, String> envoyLabels = new HashMap<>();
         envoyLabels.put("os", "LINUX");
         envoyLabels.put("arch", "X86_64");
@@ -113,23 +117,29 @@ public class EnvoyNodeManagementTest {
                 .setTenantId(tenantId)
                 .setAddress(address);
 
-        when(kv.put(argThat(t -> t.toStringUtf8().startsWith("/nodes/expected")), any()))
+        String identifierPath = String.format("/tenants/%s/identifiers/%s:%s",
+                tenantId, identifier, identifierValue);
+
+
+        when(kv.put(argThat(t -> t.toStringUtf8().startsWith("/")), any()))
                 .thenReturn(completedPutResponse());
-        when(kv.put(argThat(t -> t.toStringUtf8().startsWith("/nodes/active")), any(), any()))
+        when(kv.put(argThat(t -> t.toStringUtf8().startsWith("/")), any(), any()))
                 .thenReturn(completedPutResponse());
 
         envoyNodeManagement.registerNode(tenantId, envoyId, leaseId, identifier, envoyLabels, address).join();
 
         verifyNodeInfoPut("/nodes/active/" + nodeKeyHash, nodeInfo, leaseId);
         verifyNodeInfoPut("/nodes/expected/" + nodeKeyHash, nodeInfo, null);
+        verifyIdentifierPut(identifierPath, startedDate);
 
-        when(kv.delete(argThat(t -> t.toStringUtf8().startsWith("/nodes"))))
+        when(kv.delete(argThat(t -> t.toStringUtf8().startsWith("/"))))
                 .thenReturn(completedDeletedResponse());
 
         envoyNodeManagement.removeNode(tenantId, identifier, identifierValue).join();
 
         verifyDelete("/nodes/active/" + nodeKeyHash);
         verifyDelete("/nodes/expected/" + nodeKeyHash);
+        verifyDelete(identifierPath);
     }
 
     private void verifyNodeInfoPut(String k, NodeInfo v, Long leaseId) {
@@ -170,7 +180,25 @@ public class EnvoyNodeManagementTest {
         }
     }
 
-    private void verifyDelete(String k) {
+    private void verifyIdentifierPut(String k, Date startedDate) {
+        verify(kv).put(
+                eq(ByteSequence.fromString(k)),
+                argThat(value -> {
+                    byte[] connectionStatusBytes = value.getBytes();
+                    NodeConnectionStatus connectionStatus;
+                    try {
+                        connectionStatus = objectMapper.readValue(connectionStatusBytes, NodeConnectionStatus.class);
+                    } catch (IOException e) {
+                        assertNull(e);
+                        return false;
+                    }
+                    assertTrue(connectionStatus.isConnected());
+                    assertTrue(connectionStatus.getLastConnectedTime().after(startedDate));
+                    return true;
+                }));
+    }
+
+    private void verifyDelete(String k){
         verify(kv).delete(
                 eq(ByteSequence.fromString(k)));
     }
