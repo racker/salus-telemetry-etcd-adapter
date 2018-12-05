@@ -92,7 +92,7 @@ public class EnvoyNodeManagementTest {
         String identifier = "os";
         String identifierValue = envoyLabels.get(identifier);
         long leaseId = 50;
-        SocketAddress address;
+        InetSocketAddress address;
         try {
             address = new InetSocketAddress(InetAddress.getLocalHost(), 1234);
         } catch (UnknownHostException e) {
