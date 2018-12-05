@@ -21,10 +21,13 @@ package com.rackspace.salus.telemetry.etcd.services;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 
 import com.coreos.jetcd.Client;
+import com.coreos.jetcd.Watch;
 import com.coreos.jetcd.data.ByteSequence;
 import com.coreos.jetcd.kv.GetResponse;
 import com.coreos.jetcd.options.GetOption;
 import com.coreos.jetcd.options.PutOption;
+import com.coreos.jetcd.options.WatchOption;
+import com.coreos.jetcd.watch.WatchResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
@@ -79,8 +82,8 @@ public class EnvoyNodeManagement {
                 .setIdentifier(identifier)
                 .setIdentifierValue(identifierValue)
                 .setLabels(envoyLabels)
-                .setTenantId(tenantId)
-                .setAddress(remoteAddr);
+                .setTenantId(tenantId);
+            //    .setAddress(remoteAddr);
 
         final String nodeKeyHash = hashing.hash(nodeKey);
         final ByteSequence nodeInfoBytes;
@@ -102,4 +105,10 @@ public class EnvoyNodeManagement {
                 GetOption.newBuilder().withRange(buildKey(prefix, max)).build());
 
     }
+    public Watch.Watcher getWatchOverRange(String prefix, String min, String max, long revision) {
+        return etcd.getWatchClient().watch(buildKey(prefix, min),
+                WatchOption.newBuilder().withRange(buildKey(prefix, max))
+                        .withPrevKV(true).withRevision(revision).build());
+    }
+
 }

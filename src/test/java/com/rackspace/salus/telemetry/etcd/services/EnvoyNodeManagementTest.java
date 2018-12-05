@@ -108,8 +108,8 @@ public class EnvoyNodeManagementTest {
                 .setIdentifier(identifier)
                 .setIdentifierValue(identifierValue)
                 .setLabels(envoyLabels)
-                .setTenantId(tenantId)
-                .setAddress(address);
+                .setTenantId(tenantId);
+           //     .setAddress(address);
 
         when(kv.put(argThat(t -> t.toStringUtf8().startsWith("/nodes/expected")), any()))
                 .thenReturn(completedPutResponse());
