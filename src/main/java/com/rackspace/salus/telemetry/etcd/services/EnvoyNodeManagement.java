@@ -32,6 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -78,7 +79,7 @@ public class EnvoyNodeManagement {
                 .setIdentifierValue(identifierValue)
                 .setLabels(envoyLabels)
                 .setTenantId(tenantId)
-                .setAddress(remoteAddr);
+                .setAddress((InetSocketAddress) remoteAddr);
 
         final String nodeKeyHash = hashing.hash(nodeKey);
         final ByteSequence nodeInfoBytes;
