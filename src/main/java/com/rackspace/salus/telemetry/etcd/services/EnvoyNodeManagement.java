@@ -95,4 +95,22 @@ public class EnvoyNodeManagement {
                         etcd.getKVClient().put(
                                 buildKey(Keys.FMT_NODES_ACTIVE, nodeKeyHash), nodeInfoBytes, putLeaseOption));
     }
+
+    /**
+     * Removes all known keys for an envoy from etcd.
+     *
+     * @param tenantId The tenant used to authenticate the the envoy.
+     * @param identifier The key of the label used in envoy presence monitoring.
+     * @param identifierValue The value of the label used in envoy presence monitoring.
+     * @return The results of an etcd DELETE.
+     */
+    public CompletableFuture<?> removeNode(String tenantId, String identifier, String identifierValue) {
+        String nodeKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
+        final String nodeKeyHash = hashing.hash(nodeKey);
+        return etcd.getKVClient().delete(
+                buildKey(Keys.FMT_NODES_EXPECTED, nodeKeyHash))
+                .thenCompose(delResponse ->
+                        etcd.getKVClient().delete(
+                                buildKey(Keys.FMT_NODES_ACTIVE, nodeKeyHash)));
+    }
 }

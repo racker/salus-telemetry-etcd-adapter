@@ -18,6 +18,7 @@
 
 package com.rackspace.salus.telemetry.etcd.services;
 
+import static com.rackspace.salus.telemetry.etcd.EtcdUtils.completedDeletedResponse;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.completedPutResponse;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -83,7 +84,7 @@ public class EnvoyNodeManagementTest {
     }
 
     @Test
-    public void testRegister() {
+    public void testRegisterAndRemove() {
         Map<String, String> envoyLabels = new HashMap<>();
         envoyLabels.put("os", "LINUX");
         envoyLabels.put("arch", "X86_64");
@@ -121,6 +122,14 @@ public class EnvoyNodeManagementTest {
 
         verifyNodeInfoPut("/nodes/active/" + nodeKeyHash, nodeInfo, leaseId);
         verifyNodeInfoPut("/nodes/expected/" + nodeKeyHash, nodeInfo, null);
+
+        when(kv.delete(argThat(t -> t.toStringUtf8().startsWith("/nodes"))))
+                .thenReturn(completedDeletedResponse());
+
+        envoyNodeManagement.removeNode(tenantId, identifier, identifierValue).join();
+
+        verifyDelete("/nodes/active/" + nodeKeyHash);
+        verifyDelete("/nodes/expected/" + nodeKeyHash);
     }
 
     private void verifyNodeInfoPut(String k, NodeInfo v, Long leaseId) {
@@ -159,5 +168,10 @@ public class EnvoyNodeManagementTest {
                     eq(ByteSequence.fromString(k)),
                     eq(valueBytes));
         }
+    }
+
+    private void verifyDelete(String k) {
+        verify(kv).delete(
+                eq(ByteSequence.fromString(k)));
     }
 }
