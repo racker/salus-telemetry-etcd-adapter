@@ -41,16 +41,19 @@ import com.rackspace.salus.telemetry.model.AgentRelease;
 import com.rackspace.salus.telemetry.model.AgentType;
 import com.rackspace.salus.telemetry.model.NotFoundException;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 @Slf4j
@@ -99,6 +102,24 @@ public class AgentsCatalogService {
 
     public CompletableFuture<List<AgentRelease>> getAllAgentReleases() {
         return getAgentReleasesByPrefix(fromString("/agentsByType/"));
+    }
+
+    /**
+     * Provides a query-friendly wrapper around the "getAgentReleases" operations
+     * @return if id is populated, only that agent release. If type is set, only releases of for
+     * that agent type. Otherwise, returns all agent releases.
+     */
+    public CompletableFuture<List<AgentRelease>> queryAgentReleases(@Nullable  String id, @Nullable AgentType type) {
+      if (StringUtils.hasText(id)) {
+        return getAgentById(id)
+            .thenApply(Collections::singletonList);
+      }
+      else if (type != null) {
+        return getAgentReleasesByType(type);
+      }
+      else {
+        return getAllAgentReleases();
+      }
     }
 
     public CompletableFuture<List<AgentRelease>> getAgentReleasesByType(AgentType agentType) {
