@@ -22,6 +22,7 @@ import static com.rackspace.salus.telemetry.etcd.EtcdUtils.parseValue;
 
 import com.coreos.jetcd.Client;
 import com.coreos.jetcd.data.ByteSequence;
+import com.coreos.jetcd.data.KeyValue;
 import com.coreos.jetcd.options.GetOption;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -118,30 +119,39 @@ public class ConfigService {
                 etcd.getKVClient().delete(key
                 ).thenApply(deleteResponse -> {
                     if (deleteResponse.getDeleted() == 0) {
-                        throw new NotFoundException("Could not find Config to delete");
+                        return null;
                     }
                     return ac;
                 })
         );
     }
-    public CompletableFuture<List<AgentConfig>> get(String tenantId) {
+
+    public CompletableFuture<List<AgentConfig>> getOne(String tenantId, String id) {
+        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_AGENT_CONFIGS, tenantId, id);
+        return etcd.getKVClient().get(key)
+                .thenApply(getResponse -> parseAgentConfigs(getResponse.getKvs()));
+    }
+
+    public CompletableFuture<List<AgentConfig>> getAll(String tenantId) {
         ByteSequence key = EtcdUtils.buildKey(Keys.FMT_AGENT_CONFIGS, tenantId, "");
         return etcd.getKVClient().get(key,
                 GetOption.newBuilder()
                         .withPrefix(key)
                         .build())
-                .thenApply(getResponse -> {
-                    return getResponse.getKvs().stream()
-                            .map(keyValue ->
-                                    {
-                                        try {
-                                            return parseValue(objectMapper, keyValue, AgentConfig.class);
-                                        } catch (IOException e) {
-                                            throw new RuntimeException("Failed to parse AgentConfig", e);
-                                        }
-                                    }
-                            )
-                            .collect(Collectors.toList());
-                });
+                .thenApply(getResponse -> parseAgentConfigs(getResponse.getKvs()));
+    }
+
+    private List<AgentConfig> parseAgentConfigs(List<KeyValue> kvs) {
+        return kvs.stream()
+                .map(keyValue ->
+                        {
+                            try {
+                                return parseValue(objectMapper, keyValue, AgentConfig.class);
+                            } catch (IOException e) {
+                                throw new RuntimeException("Failed to parse AgentConfig", e);
+                            }
+                        }
+                )
+                .collect(Collectors.toList());
     }
 }

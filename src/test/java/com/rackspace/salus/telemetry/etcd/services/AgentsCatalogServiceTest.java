@@ -39,8 +39,8 @@ import com.coreos.jetcd.options.GetOption;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
-import com.rackspace.salus.telemetry.model.AgentInfo;
 import com.rackspace.salus.telemetry.model.AgentInstallSelector;
+import com.rackspace.salus.telemetry.model.AgentRelease;
 import com.rackspace.salus.telemetry.model.AgentType;
 import com.rackspace.salus.telemetry.model.OperatingSystem;
 import java.util.HashMap;
@@ -97,7 +97,7 @@ public class AgentsCatalogServiceTest {
                 return CompletableFuture.completedFuture(invocationOnMock.getArgument(2));
             });
 
-        AgentInfo agentInfo = new AgentInfo()
+        AgentRelease agentRelease = new AgentRelease()
                 .setId("ai1")
                 .setType(AgentType.FILEBEAT);
 
@@ -111,7 +111,7 @@ public class AgentsCatalogServiceTest {
                 .setLabels(labels);
 
         when(kv.get(ByteSequence.fromString("/agentsById/ai1")))
-                .thenReturn(buildGetResponse(objectMapper, "/agentsById/ai1", agentInfo));
+                .thenReturn(buildGetResponse(objectMapper, "/agentsById/ai1", agentRelease));
 
         // prep with no prior selectors
         when(kv.get(eq(ByteSequence.fromString("/tenants/t1/agentInstallSelectors/FILEBEAT")), any(GetOption.class)))

@@ -18,6 +18,7 @@
 
 package com.rackspace.salus.telemetry.etcd.services;
 
+import static com.coreos.jetcd.data.ByteSequence.fromString;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildValue;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.completedDeletedResponse;
@@ -26,14 +27,17 @@ import static com.rackspace.salus.telemetry.etcd.EtcdUtils.parseValue;
 import com.coreos.jetcd.Client;
 import com.coreos.jetcd.data.ByteSequence;
 import com.coreos.jetcd.kv.GetResponse;
+import com.coreos.jetcd.options.DeleteOption;
 import com.coreos.jetcd.options.GetOption;
+import com.coreos.jetcd.options.GetOption.SortOrder;
+import com.coreos.jetcd.options.GetOption.SortTarget;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.types.KeyedValue;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
-import com.rackspace.salus.telemetry.model.AgentInfo;
 import com.rackspace.salus.telemetry.model.AgentInstallSelector;
+import com.rackspace.salus.telemetry.model.AgentRelease;
 import com.rackspace.salus.telemetry.model.AgentType;
 import com.rackspace.salus.telemetry.model.NotFoundException;
 import java.io.IOException;
@@ -67,12 +71,12 @@ public class AgentsCatalogService {
         this.idGenerator = idGenerator;
     }
 
-    public CompletableFuture<AgentInfo> declare(AgentInfo agentInfo) {
-        agentInfo.setId(idGenerator.generate());
+    public CompletableFuture<AgentRelease> declare(AgentRelease agentRelease) {
+        agentRelease.setId(idGenerator.generate());
 
         final ByteSequence agentInfoBytes;
         try {
-            agentInfoBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(agentInfo));
+            agentInfoBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(agentRelease));
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to marshal AgentInfo", e);
         }
@@ -80,46 +84,55 @@ public class AgentsCatalogService {
         return CompletableFuture.allOf(
             etcd.getKVClient().put(
                 buildKey(
-                    "/agentsByType/{agentType}/{version}/{agentId}",
-                    agentInfo.getType(), agentInfo.getVersion(), agentInfo.getId()
+                    Keys.FMT_AGENTS_BY_TYPE,
+                    agentRelease.getType(), agentRelease.getVersion(), agentRelease.getId()
                 ),
                 agentInfoBytes
             ),
             etcd.getKVClient().put(
-                buildKey("/agentsById/{agentId}", agentInfo.getId()),
+                buildKey("/agentsById/{agentId}", agentRelease.getId()),
                 agentInfoBytes
             )
         )
-            .thenApply(aVoid -> agentInfo);
+            .thenApply(aVoid -> agentRelease);
     }
 
-    public CompletableFuture<List<AgentInfo>> getAgentsByType(AgentType agentType) {
-        final ByteSequence key = buildKey("/agentsByType/{agentType}", agentType.name());
+    public CompletableFuture<List<AgentRelease>> getAllAgentReleases() {
+        return getAgentReleasesByPrefix(fromString("/agentsByType/"));
+    }
 
-        final CompletableFuture<GetResponse> response = etcd.getKVClient().get(
-            key,
-            GetOption.newBuilder()
-                .withPrefix(key)
-                .build()
-        );
+    public CompletableFuture<List<AgentRelease>> getAgentReleasesByType(AgentType agentType) {
+        return getAgentReleasesByPrefix(buildKey("/agentsByType/{agentType}", agentType.name()));
+    }
 
-        return response.thenApply((getResponse) -> {
+    private CompletableFuture<List<AgentRelease>> getAgentReleasesByPrefix(ByteSequence prefix) {
+
+      return etcd.getKVClient().get(
+          prefix,
+          GetOption.newBuilder()
+              .withPrefix(prefix)
+              .withSortField(SortTarget.MOD)
+              .withSortOrder(SortOrder.DESCEND)
+              .build()
+      )
+          .thenApply((getResponse) -> {
 
             return getResponse.getKvs().stream()
                 .map(keyValue -> {
-                    try {
-                        return objectMapper.readValue(keyValue.getValue().getBytes(), AgentInfo.class);
-                    } catch (IOException e) {
-                        log.warn("Failed to parse AgentInfo", e);
-                        return null;
-                    }
+                  try {
+                    return objectMapper
+                        .readValue(keyValue.getValue().getBytes(), AgentRelease.class);
+                  } catch (IOException e) {
+                    log.warn("Failed to parse AgentInfo", e);
+                    return null;
+                  }
                 })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-        });
+          });
     }
 
-    public CompletableFuture<AgentInfo> getAgentById(String agentId) {
+    public CompletableFuture<AgentRelease> getAgentById(String agentId) {
 
         return etcd.getKVClient().get(
             buildKey("/agentsById/{agentId}", agentId)
@@ -130,7 +143,7 @@ public class AgentsCatalogService {
                     throw new NotFoundException("Could not find AgentInfo");
                 }
                 try {
-                    return parseValue(objectMapper, getResponse.getKvs().get(0), AgentInfo.class);
+                    return parseValue(objectMapper, getResponse.getKvs().get(0), AgentRelease.class);
                 } catch (IOException e) {
                     throw new RuntimeException("Failed to parse AgentInfo", e);
                 }
@@ -155,6 +168,40 @@ public class AgentsCatalogService {
             .thenCompose(agentType ->
                 envoyLabelManagement.applyAgentInfoSelector(
                     tenantId, agentType, agentInstallSelector));
+    }
+
+    public CompletableFuture<List<AgentInstallSelector>> getInstallations(String tenantId) {
+      final ByteSequence key = buildKey(
+          Keys.FMT_AGENT_INSTALL_SELECTORS_PREFIX,
+          tenantId);
+
+      return etcd.getKVClient()
+          .get(
+              key,
+              GetOption.newBuilder()
+                  .withPrefix(key)
+                  .build()
+          )
+          .thenApply(getResponse ->
+              getResponse.getKvs().stream()
+                  .map(keyValue -> {
+
+                    try {
+                      return objectMapper.readValue(
+                          keyValue.getValue().getBytes(),
+                          AgentInstallSelector.class
+                      );
+                    } catch (IOException e) {
+                      log.warn(
+                          "Failed to parse agentIntallSelector={}",
+                          keyValue.getKey().toStringUtf8()
+                      );
+                      return null;
+                    }
+                  })
+                  .filter(Objects::nonNull)
+                  .collect(Collectors.toList())
+          );
     }
 
     /**
@@ -232,16 +279,54 @@ public class AgentsCatalogService {
                 }
 
                 try {
-                    final AgentInfo agentInfo = parseValue(
+                    final AgentRelease agentRelease = parseValue(
                         objectMapper, getResponse.getKvs().get(0),
-                        AgentInfo.class
+                        AgentRelease.class
                     );
 
-                    return agentInfo.getType();
+                    return agentRelease.getType();
                 } catch (IOException e) {
                     throw new RuntimeException("Failed to parse AgentInfo", e);
                 }
             });
     }
 
+  public CompletableFuture<Boolean> deleteAgentRelease(String id) {
+    final ByteSequence idKey = buildKey("/agentsById/{agentId}", id);
+
+    return etcd.getKVClient()
+        .delete(
+            idKey,
+            DeleteOption.newBuilder()
+                .withPrevKV(true)
+                .build()
+        )
+        .thenApply(resp -> {
+          if (resp.getDeleted() == 0) {
+            return null;
+          }
+
+          try {
+            return objectMapper.readValue(resp.getPrevKvs().get(0).getValue().getBytes(), AgentRelease.class);
+          } catch (IOException e) {
+            log.warn("Failed to parse agentsById entry at id={}", id);
+            return null;
+          }
+        })
+        .thenCompose(agentRelease -> {
+          if (agentRelease == null) {
+            // short circuit the follow up deletion below with an immediate false
+            return CompletableFuture.completedFuture(false);
+          }
+
+          return etcd.getKVClient()
+              .delete(
+                  buildKey(
+                      Keys.FMT_AGENTS_BY_TYPE,
+                      agentRelease.getType(), agentRelease.getVersion(), agentRelease.getId()
+                  )
+              )
+              .thenApply(deleteResponse -> deleteResponse.getDeleted() != 0);
+        });
+  }
 }
