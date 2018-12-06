@@ -179,7 +179,7 @@ public class AgentsCatalogService {
         // to derive agent type
         // put agent install selector
 
-        return getTypeFromAgentInfo(agentInstallSelector.getAgentReleaseId())
+        return getTypeFromAgentRelease(agentInstallSelector.getAgentReleaseId())
             .thenCompose(agentType ->
                 removeOldAgentInstallSelectors(
                     agentInstallSelector, tenantId, agentType))
@@ -291,7 +291,7 @@ public class AgentsCatalogService {
         }
     }
 
-    private CompletableFuture<@NotNull AgentType> getTypeFromAgentInfo(@NotEmpty String agentInfoId) {
+    private CompletableFuture<@NotNull AgentType> getTypeFromAgentRelease(@NotEmpty String agentInfoId) {
         return etcd.getKVClient()
             .get(buildKey("/agentsById/{agentId}", agentInfoId))
             .thenApply(getResponse -> {
