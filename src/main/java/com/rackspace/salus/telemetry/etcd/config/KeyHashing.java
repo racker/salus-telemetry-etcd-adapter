@@ -20,9 +20,8 @@ package com.rackspace.salus.telemetry.etcd.config;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
-import org.springframework.stereotype.Component;
-
 import java.nio.charset.StandardCharsets;
+import org.springframework.stereotype.Component;
 
 @Component
 public class KeyHashing {
@@ -39,5 +38,12 @@ public class KeyHashing {
      */
     public String hash(String value) {
         return hashFunction().hashString(value, StandardCharsets.UTF_8).toString();
+    }
+
+    /**
+     * @return the bit size of the current hash algorithm
+     */
+    public int bits() {
+        return hashFunction().bits();
     }
 }
