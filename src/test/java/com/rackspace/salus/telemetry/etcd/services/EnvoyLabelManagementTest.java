@@ -44,9 +44,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
+import com.rackspace.salus.telemetry.etcd.types.AgentInstallSelector;
 import com.rackspace.salus.telemetry.etcd.types.AppliedConfig;
 import com.rackspace.salus.telemetry.model.AgentConfig;
-import com.rackspace.salus.telemetry.model.AgentInstallSelector;
 import com.rackspace.salus.telemetry.model.AgentType;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -291,7 +291,7 @@ public class EnvoyLabelManagementTest {
 
         AgentInstallSelector ais = new AgentInstallSelector()
             .setId("ais1")
-            .setAgentInfoId("info1")
+            .setAgentReleaseId("info1")
             .setLabels(selectedLabels);
 
         final AgentInstallSelector result = envoyLabelManagement.applyAgentInfoSelector("t1", AgentType.FILEBEAT, ais).join();
@@ -320,7 +320,7 @@ public class EnvoyLabelManagementTest {
                         )
                         .setValue(ByteString.copyFromUtf8("{\n" +
                             "  \"id\": \"a\",\n" +
-                            "  \"agentInfoId\": \"ai1\",\n" +
+                            "  \"agentReleaseId\": \"ai1\",\n" +
                             "  \"labels\": {\n" +
                             "    \"os\": \"LINUX\"\n" +
                             "  }\n" +
@@ -368,7 +368,7 @@ public class EnvoyLabelManagementTest {
                         )
                         .setValue(ByteString.copyFromUtf8("{\n" +
                             "  \"id\": \"a\",\n" +
-                            "  \"agentInfoId\": \"ai1\",\n" +
+                            "  \"agentReleaseId\": \"ai1\",\n" +
                             "  \"labels\": {\n" +
                             "    \"os\": \"LINUX\"\n" +
                             "  }\n" +

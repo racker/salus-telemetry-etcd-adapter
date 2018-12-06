@@ -118,7 +118,7 @@ public class ConfigServiceTest {
         final ByteSequence key = EtcdUtils.buildKey(Keys.FMT_AGENT_CONFIGS, "t1", "");
         when(kv.get(eq(key), any()))
             .thenReturn(buildGetResponse(objectMapper, configKey, agentConfig));
-        List<AgentConfig> results = configService.get("t1").join();
+        List<AgentConfig> results = configService.getAll("t1").join();
         assertEquals(results, Arrays.asList(agentConfig));
 
         // Test modify

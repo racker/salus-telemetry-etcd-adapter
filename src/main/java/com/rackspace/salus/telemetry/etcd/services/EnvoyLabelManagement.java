@@ -38,10 +38,10 @@ import com.coreos.jetcd.options.PutOption;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
+import com.rackspace.salus.telemetry.etcd.types.AgentInstallSelector;
 import com.rackspace.salus.telemetry.etcd.types.AppliedConfig;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
 import com.rackspace.salus.telemetry.model.AgentConfig;
-import com.rackspace.salus.telemetry.model.AgentInstallSelector;
 import com.rackspace.salus.telemetry.model.AgentType;
 import java.io.IOException;
 import java.util.Collections;
@@ -193,7 +193,7 @@ public class EnvoyLabelManagement {
                                 log.debug("Applying agent install of type={} leaseId={} for tenant={}, envoyInstance={}",
                                     agentType, leaseId, tenantId, envoyInstanceId);
 
-                                final String agentInfoId = agentInstallSelector.getAgentInfoId();
+                                final String agentInfoId = agentInstallSelector.getAgentReleaseId();
 
                                 return installAgentForExistingEnvoy(tenantId, agentType, envoyInstanceId, leaseId, agentInfoId);
                             }))
@@ -413,7 +413,7 @@ public class EnvoyLabelManagement {
             final ByteSequence installKey = buildKey(Keys.FMT_AGENT_INSTALLS,
                 tenantId, envoyInstanceId, agentType);
             final ByteSequence agentInfoIdBytes =
-                ByteSequence.fromString(selectorWithKV.selector.getAgentInfoId());
+                ByteSequence.fromString(selectorWithKV.selector.getAgentReleaseId());
 
             // only install if a more specific match wasn't already processed
             return txn.If(
