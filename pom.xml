@@ -70,6 +70,13 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>com.github.mxsm</groupId>
+      <artifactId>jetcd-launcher</artifactId>
+      <version>0.3.6</version>
+      <scope>test</scope>
+    </dependency>
+
   </dependencies>
 
   <dependencyManagement>
