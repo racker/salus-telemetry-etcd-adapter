@@ -18,57 +18,60 @@
 
 package com.rackspace.salus.telemetry.etcd.services;
 
-import static com.rackspace.salus.telemetry.etcd.EtcdUtils.completedDeletedResponse;
-import static com.rackspace.salus.telemetry.etcd.EtcdUtils.completedPutResponse;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
+import static org.junit.Assert.*;
 
 import com.coreos.jetcd.Client;
-import com.coreos.jetcd.KV;
-import com.coreos.jetcd.data.ByteSequence;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.coreos.jetcd.data.KeyValue;
+import com.coreos.jetcd.lease.LeaseGrantResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.net.UnknownHostException;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
 import com.rackspace.salus.telemetry.model.NodeConnectionStatus;
 import com.rackspace.salus.telemetry.model.NodeInfo;
-import org.junit.Before;
-import org.junit.Test;
+import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
+import org.junit.*;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.json.JsonTest;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.junit4.SpringRunner;
 
 @RunWith(SpringRunner.class)
-@Import(KeyHashing.class)
 @SpringBootTest(webEnvironment = WebEnvironment.NONE)
 @JsonTest // sets up ObjectMapper
 public class EnvoyNodeManagementTest {
 
-    @MockBean
-    Client etcd;
+    @Configuration
+    @Import({KeyHashing.class, EnvoyNodeManagement.class})
+    public static class TestConfig {
+        @Bean
+        public Client getClient() {
+            final List<String> endpoints = etcd.cluster().getClientEndpoints().stream()
+                    .map(URI::toString)
+                    .collect(Collectors.toList());
+            return Client.builder().endpoints(endpoints).build();
+        }
+    }
 
-    @Mock
-    KV kv;
+    @ClassRule
+    public static final EtcdClusterResource etcd = new EtcdClusterResource("test-etcd", 1);
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -76,15 +79,12 @@ public class EnvoyNodeManagementTest {
     @Autowired
     private KeyHashing hashing;
 
+    @Autowired
+    private Client client;
+
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
     @Autowired
     EnvoyNodeManagement envoyNodeManagement;
-
-
-    @Before
-    public void setUp() {
-        when(etcd.getKVClient()).thenReturn(kv);
-    }
 
     @Test
     public void testRegisterAndRemove() {
@@ -97,7 +97,13 @@ public class EnvoyNodeManagementTest {
         String tenantId = "123456";
         String identifier = "os";
         String identifierValue = envoyLabels.get(identifier);
-        long leaseId = 50;
+        long leaseId = 0;
+        try {
+            leaseId = client.getLeaseClient().grant(10000)
+                    .thenApply(LeaseGrantResponse::getID).get();
+        } catch (ExecutionException | InterruptedException e) {
+            assertNull(e);
+        }
         InetSocketAddress address;
         try {
             address = new InetSocketAddress(InetAddress.getLocalHost(), 1234);
@@ -120,20 +126,11 @@ public class EnvoyNodeManagementTest {
         String identifierPath = String.format("/tenants/%s/identifiers/%s:%s",
                 tenantId, identifier, identifierValue);
 
-
-        when(kv.put(argThat(t -> t.toStringUtf8().startsWith("/")), any()))
-                .thenReturn(completedPutResponse());
-        when(kv.put(argThat(t -> t.toStringUtf8().startsWith("/")), any(), any()))
-                .thenReturn(completedPutResponse());
-
         envoyNodeManagement.registerNode(tenantId, envoyId, leaseId, identifier, envoyLabels, address).join();
 
-        verifyNodeInfoPut("/nodes/active/" + nodeKeyHash, nodeInfo, leaseId);
-        verifyNodeInfoPut("/nodes/expected/" + nodeKeyHash, nodeInfo, null);
-        verifyIdentifierPut(identifierPath, startedDate);
-
-        when(kv.delete(argThat(t -> t.toStringUtf8().startsWith("/"))))
-                .thenReturn(completedDeletedResponse());
+        verifyNodeInfo("/nodes/active/" + nodeKeyHash, nodeInfo, leaseId);
+        verifyNodeInfo("/nodes/expected/" + nodeKeyHash, nodeInfo, null);
+        verifyNodeConnectionStatus(identifierPath, startedDate);
 
         envoyNodeManagement.removeNode(tenantId, identifier, identifierValue).join();
 
@@ -142,64 +139,66 @@ public class EnvoyNodeManagementTest {
         verifyDelete(identifierPath);
     }
 
-    private void verifyNodeInfoPut(String k, NodeInfo v, Long leaseId) {
-        ByteSequence valueBytes;
-        try {
-            valueBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(v));
-        } catch (JsonProcessingException e) {
-            assertNull(e);
-            valueBytes = null;
-        }
+    private void verifyNodeInfo(String k, NodeInfo v, Long leaseId) {
+        client.getKVClient().get(buildKey(k))
+                .thenApply(getResponse -> {
+                    assertEquals("Only stored 1 item for key so should only receive 1",
+                            1, getResponse.getCount());
+                    KeyValue storedData = getResponse.getKvs().get(0);
 
-        if (leaseId != null) {
-            verify(kv).put(
-                    eq(ByteSequence.fromString(k)),
-                    argThat(value -> {
-                        byte[] nodeInfoBytes = value.getBytes();
-                        NodeInfo nodeInfo;
-                        try {
-                            nodeInfo = objectMapper.readValue(nodeInfoBytes, NodeInfo.class);
-                        } catch (IOException e) {
-                            assertNull(e);
-                            return false;
-                        }
-                        assertEquals(v.getEnvoyId(), nodeInfo.getEnvoyId());
-                        assertEquals(v.getIdentifier(), nodeInfo.getIdentifier());
-                        assertEquals(v.getIdentifierValue(), nodeInfo.getIdentifierValue());
-                        assertEquals(v.getTenantId(), nodeInfo.getTenantId());
-                        assertEquals(v.getAddress().getHostName(), nodeInfo.getAddress().getHostName());
-                        assertEquals(v.getAddress().getPort(), nodeInfo.getAddress().getPort());
-                        assertEquals(v.getLabels().size(), nodeInfo.getLabels().size());
-                        return true;
-                    }),
-                    argThat(putOption -> putOption.getLeaseId() == leaseId));
-        } else {
-            verify(kv).put(
-                    eq(ByteSequence.fromString(k)),
-                    eq(valueBytes));
-        }
-    }
-
-    private void verifyIdentifierPut(String k, Date startedDate) {
-        verify(kv).put(
-                eq(ByteSequence.fromString(k)),
-                argThat(value -> {
-                    byte[] connectionStatusBytes = value.getBytes();
-                    NodeConnectionStatus connectionStatus;
-                    try {
-                        connectionStatus = objectMapper.readValue(connectionStatusBytes, NodeConnectionStatus.class);
+                    String key = storedData.getKey().toStringUtf8();
+                    NodeInfo nodeInfo;
+                    try {;
+                        nodeInfo = objectMapper.readValue(storedData.getValue().getBytes(), NodeInfo.class);
                     } catch (IOException e) {
-                        assertNull(e);
+                        assertNull("Any exception should cause a failure", e);
                         return false;
                     }
+                    assertEquals(k, key);
+                    assertEquals(v.getEnvoyId(), nodeInfo.getEnvoyId());
+                    assertEquals(v.getIdentifier(), nodeInfo.getIdentifier());
+                    assertEquals(v.getIdentifierValue(), nodeInfo.getIdentifierValue());
+                    assertEquals(v.getTenantId(), nodeInfo.getTenantId());
+                    assertEquals(v.getAddress().getHostName(), nodeInfo.getAddress().getHostName());
+                    assertEquals(v.getAddress().getPort(), nodeInfo.getAddress().getPort());
+                    assertEquals(v.getLabels().size(), nodeInfo.getLabels().size());
+
+                    if (leaseId != null) {
+                        assertEquals(leaseId.longValue(), storedData.getLease());
+                    }
+                    return true;
+                }).join();
+    }
+
+    private void verifyNodeConnectionStatus(String k, Date startedDate) {
+        client.getKVClient().get(buildKey(k))
+                .thenApply(getResponse -> {
+                    assertEquals("Only stored 1 item for key so should only receive 1",
+                            1, getResponse.getCount());
+                    KeyValue storedData = getResponse.getKvs().get(0);
+
+                    String key = storedData.getKey().toStringUtf8();
+                    NodeConnectionStatus connectionStatus;
+                    try {
+                        connectionStatus = objectMapper.readValue(storedData.getValue().getBytes(),
+                                NodeConnectionStatus.class);
+                    } catch (IOException e) {
+                        assertNull("Any exception should cause a failure", e);
+                        return false;
+                    }
+                    assertEquals(k, key);
                     assertTrue(connectionStatus.isConnected());
                     assertTrue(connectionStatus.getLastConnectedTime().after(startedDate));
+
                     return true;
-                }));
+                }).join();
     }
 
     private void verifyDelete(String k){
-        verify(kv).delete(
-                eq(ByteSequence.fromString(k)));
+        client.getKVClient().get(buildKey(k))
+                .thenApply(getResponse -> {
+                    assertEquals("No data should be found", 0, getResponse.getCount());
+                    return true;
+                }).join();
     }
 }
