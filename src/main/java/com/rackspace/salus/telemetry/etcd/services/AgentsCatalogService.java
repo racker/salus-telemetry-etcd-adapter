@@ -34,9 +34,9 @@ import com.coreos.jetcd.options.GetOption.SortTarget;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
+import com.rackspace.salus.telemetry.etcd.types.AgentInstallSelector;
 import com.rackspace.salus.telemetry.etcd.types.KeyedValue;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
-import com.rackspace.salus.telemetry.model.AgentInstallSelector;
 import com.rackspace.salus.telemetry.model.AgentRelease;
 import com.rackspace.salus.telemetry.model.AgentType;
 import com.rackspace.salus.telemetry.model.NotFoundException;
@@ -179,7 +179,7 @@ public class AgentsCatalogService {
         // to derive agent type
         // put agent install selector
 
-        return getTypeFromAgentInfo(agentInstallSelector.getAgentInfoId())
+        return getTypeFromAgentInfo(agentInstallSelector.getAgentReleaseId())
             .thenCompose(agentType ->
                 removeOldAgentInstallSelectors(
                     agentInstallSelector, tenantId, agentType))

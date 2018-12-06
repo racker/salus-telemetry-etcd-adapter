@@ -39,7 +39,7 @@ import com.coreos.jetcd.options.GetOption;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
-import com.rackspace.salus.telemetry.model.AgentInstallSelector;
+import com.rackspace.salus.telemetry.etcd.types.AgentInstallSelector;
 import com.rackspace.salus.telemetry.model.AgentRelease;
 import com.rackspace.salus.telemetry.model.AgentType;
 import com.rackspace.salus.telemetry.model.OperatingSystem;
@@ -107,7 +107,7 @@ public class AgentsCatalogServiceTest {
 
         final AgentInstallSelector selector = new AgentInstallSelector()
                 .setId("ais1")
-                .setAgentInfoId("ai1")
+                .setAgentReleaseId("ai1")
                 .setLabels(labels);
 
         when(kv.get(ByteSequence.fromString("/agentsById/ai1")))
@@ -163,7 +163,7 @@ public class AgentsCatalogServiceTest {
                                                 "/tenants/t1/agentInstallSelectors/FILEBEAT/a"))
                                         .setValue(ByteString.copyFromUtf8("{\n" +
                                                 "  \"id\": \"a\",\n" +
-                                                "  \"agentInfoId\": \"ai1\",\n" +
+                                                "  \"agentReleaseId\": \"ai1\",\n" +
                                                 "  \"labels\": {\n" +
                                                 "    \"os\": \"LINUX\"\n" +
                                                 "  }\n" +
@@ -174,7 +174,7 @@ public class AgentsCatalogServiceTest {
                                                 "/tenants/t1/agentInstallSelectors/FILEBEAT/b"))
                                         .setValue(ByteString.copyFromUtf8("{\n" +
                                                 "  \"id\": \"b\",\n" +
-                                                "  \"agentInfoId\": \"ai2\",\n" +
+                                                "  \"agentReleaseId\": \"ai2\",\n" +
                                                 "  \"labels\": {\n" +
                                                 "    \"os\": \"WINDOWS\"\n" +
                                                 "  }\n" +
@@ -185,7 +185,7 @@ public class AgentsCatalogServiceTest {
                                                 "/tenants/t1/agentInstallSelectors/FILEBEAT/c"))
                                         .setValue(ByteString.copyFromUtf8("{\n" +
                                                 "  \"id\": \"c\",\n" +
-                                                "  \"agentInfoId\": \"ai3\",\n" +
+                                                "  \"agentReleaseId\": \"ai3\",\n" +
                                                 "  \"labels\": {\n" +
                                                 "    \"os\": \"LINUX\"\n" +
                                                 "  }\n" +
@@ -224,7 +224,7 @@ public class AgentsCatalogServiceTest {
                                                 "/tenants/t1/agentInstallSelectors/FILEBEAT/b"))
                                         .setValue(ByteString.copyFromUtf8("{\n" +
                                                 "  \"id\": \"b\",\n" +
-                                                "  \"agentInfoId\": \"ai2\",\n" +
+                                                "  \"agentReleaseId\": \"ai2\",\n" +
                                                 "  \"labels\": {\n" +
                                                 "    \"os\": \"WINDOWS\"\n" +
                                                 "  }\n" +
