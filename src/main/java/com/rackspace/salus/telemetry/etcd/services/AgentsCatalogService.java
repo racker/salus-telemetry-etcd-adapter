@@ -77,9 +77,9 @@ public class AgentsCatalogService {
     public CompletableFuture<AgentRelease> declare(AgentRelease agentRelease) {
         agentRelease.setId(idGenerator.generate());
 
-        final ByteSequence agentInfoBytes;
+        final ByteSequence agentReleaseBytes;
         try {
-            agentInfoBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(agentRelease));
+            agentReleaseBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(agentRelease));
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to marshal AgentInfo", e);
         }
@@ -90,11 +90,11 @@ public class AgentsCatalogService {
                     Keys.FMT_AGENTS_BY_TYPE,
                     agentRelease.getType(), agentRelease.getVersion(), agentRelease.getId()
                 ),
-                agentInfoBytes
+                agentReleaseBytes
             ),
             etcd.getKVClient().put(
                 buildKey("/agentsById/{agentId}", agentRelease.getId()),
-                agentInfoBytes
+                agentReleaseBytes
             )
         )
             .thenApply(aVoid -> agentRelease);
@@ -144,7 +144,7 @@ public class AgentsCatalogService {
                     return objectMapper
                         .readValue(keyValue.getValue().getBytes(), AgentRelease.class);
                   } catch (IOException e) {
-                    log.warn("Failed to parse AgentInfo", e);
+                    log.warn("Failed to parse AgentRelease", e);
                     return null;
                   }
                 })
