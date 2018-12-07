@@ -27,8 +27,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
-import com.rackspace.salus.telemetry.model.NodeConnectionStatus;
-import com.rackspace.salus.telemetry.model.NodeInfo;
+import com.rackspace.salus.telemetry.model.ResourceConnectionStatus;
+import com.rackspace.salus.telemetry.model.ResourceInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -41,14 +41,14 @@ import java.util.concurrent.CompletableFuture;
 
 @Service
 @Slf4j
-public class EnvoyNodeManagement {
+public class EnvoyResourceManagement {
 
     private final Client etcd;
     private final ObjectMapper objectMapper;
     private final KeyHashing hashing;
 
     @Autowired
-    public EnvoyNodeManagement(Client etcd, ObjectMapper objectMapper, KeyHashing hashing) {
+    public EnvoyResourceManagement(Client etcd, ObjectMapper objectMapper, KeyHashing hashing) {
         this.etcd = etcd;
         this.objectMapper = objectMapper;
         this.hashing = hashing;
@@ -68,16 +68,16 @@ public class EnvoyNodeManagement {
      * @param remoteAddr The address the envoy is connecting from.
      * @return The results of an etcd PUT.
      */
-    public CompletableFuture<?> registerNode(String tenantId, String envoyId, long leaseId,
-                                             String identifier, Map<String, String> envoyLabels,
-                                             SocketAddress remoteAddr) {
+    public CompletableFuture<?> registerResource(String tenantId, String envoyId, long leaseId,
+                                                 String identifier, Map<String, String> envoyLabels,
+                                                 SocketAddress remoteAddr) {
         final PutOption putLeaseOption = PutOption.newBuilder()
                 .withLeaseId(leaseId)
                 .build();
 
         String identifierValue = envoyLabels.get(identifier);
-        String nodeKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
-        NodeInfo nodeInfo = new NodeInfo()
+        String resourceKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
+        ResourceInfo resourceInfo = new ResourceInfo()
                 .setEnvoyId(envoyId)
                 .setIdentifier(identifier)
                 .setIdentifierValue(identifierValue)
@@ -85,33 +85,33 @@ public class EnvoyNodeManagement {
                 .setTenantId(tenantId)
                 .setAddress((InetSocketAddress) remoteAddr);
 
-        NodeConnectionStatus nodeStatus = new NodeConnectionStatus()
+        ResourceConnectionStatus resourceStatus = new ResourceConnectionStatus()
                 .setConnected(true)
                 .setLastConnectedTime(new Date());
 
-        final String nodeKeyHash = hashing.hash(nodeKey);
-        final ByteSequence nodeInfoBytes;
+        final String resourceKeyHash = hashing.hash(resourceKey);
+        final ByteSequence resourceInfoBytes;
         try {
-            nodeInfoBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(nodeInfo));
+            resourceInfoBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(resourceInfo));
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to marshal NodeInfo", e);
+            throw new RuntimeException("Failed to marshal ResourceInfo", e);
         }
 
-        final ByteSequence nodeStatusBytes;
+        final ByteSequence resourceStatusBytes;
         try {
-            nodeStatusBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(nodeStatus));
+            resourceStatusBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(resourceStatus));
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to marshal NodeConnectionStatus", e);
+            throw new RuntimeException("Failed to marshal ResourceConnectionStatus", e);
         }
 
         return etcd.getKVClient().put(
-                buildKey(Keys.FMT_NODES_EXPECTED, nodeKeyHash), nodeInfoBytes)
+                buildKey(Keys.FMT_RESOURCES_EXPECTED, resourceKeyHash), resourceInfoBytes)
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
-                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue), nodeStatusBytes))
+                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue), resourceStatusBytes))
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
-                                buildKey(Keys.FMT_NODES_ACTIVE, nodeKeyHash), nodeInfoBytes, putLeaseOption));
+                                buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash), resourceInfoBytes, putLeaseOption));
     }
 
     /**
@@ -122,14 +122,14 @@ public class EnvoyNodeManagement {
      * @param identifierValue The value of the label used in envoy presence monitoring.
      * @return The results of an etcd DELETE.
      */
-    public CompletableFuture<?> removeNode(String tenantId, String identifier, String identifierValue) {
-        String nodeKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
-        final String nodeKeyHash = hashing.hash(nodeKey);
+    public CompletableFuture<?> removeResource(String tenantId, String identifier, String identifierValue) {
+        String resourceKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
+        final String resourceKeyHash = hashing.hash(resourceKey);
         return etcd.getKVClient().delete(
-                buildKey(Keys.FMT_NODES_EXPECTED, nodeKeyHash))
+                buildKey(Keys.FMT_RESOURCES_EXPECTED, resourceKeyHash))
                 .thenCompose(delResponse ->
                         etcd.getKVClient().delete(
-                                buildKey(Keys.FMT_NODES_ACTIVE, nodeKeyHash)))
+                                buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash)))
                 .thenCompose(delResponse ->
                         etcd.getKVClient().delete(
                                 buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue)));
