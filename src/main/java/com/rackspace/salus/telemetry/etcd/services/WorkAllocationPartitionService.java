@@ -7,6 +7,9 @@ import com.coreos.jetcd.data.ByteSequence;
 import com.coreos.jetcd.kv.TxnResponse;
 import com.coreos.jetcd.op.Op;
 import com.coreos.jetcd.options.DeleteOption;
+import com.coreos.jetcd.options.GetOption;
+import com.coreos.jetcd.options.GetOption.SortOrder;
+import com.coreos.jetcd.options.GetOption.SortTarget;
 import com.coreos.jetcd.options.PutOption;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,9 +17,13 @@ import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.types.KeyRange;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
 import com.rackspace.salus.telemetry.etcd.types.WorkAllocationRealm;
+import java.io.IOException;
 import java.math.BigInteger;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -53,6 +60,37 @@ public class WorkAllocationPartitionService {
                 .build()
         )
         .thenCompose(deleteResponse -> createPartitions(realm, count));
+  }
+
+  public CompletableFuture<List<KeyRange>> getPartitions(WorkAllocationRealm realm) {
+    final ByteSequence prefix = buildKey(Keys.FMT_WORKALLOC_PARTITIONS, realm, "");
+
+    return etcd.getKVClient()
+        .get(
+            prefix,
+            GetOption.newBuilder()
+                .withPrefix(prefix)
+                // the keys are UUIDs, but at least sorting will force consistent results when
+                // using this operation
+                .withSortField(SortTarget.KEY)
+                .withSortOrder(SortOrder.ASCEND)
+                .build()
+        )
+        .thenApply(getResponse ->
+            getResponse.getKvs().stream()
+                .map(keyValue -> {
+                  try {
+                    return objectMapper
+                        .readValue(keyValue.getValue().getBytes(), KeyRange.class);
+                  } catch (IOException e) {
+                    log.warn("Failed to deserialize keyValue={} for realm={}",
+                        keyValue.getKey().toStringUtf8(), realm, e
+                    );
+                    return null;
+                  }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList()));
   }
 
   private CompletionStage<Boolean> createPartitions(WorkAllocationRealm realm, int count) {
@@ -101,11 +139,11 @@ public class WorkAllocationPartitionService {
   }
 
   /**
-   * @return the given value in hex, padded with the appropriate number of leading zeroes for the overall
-   * numeric bit size
+   * @return the given value in hex, padded with the appropriate number of leading zeroes for the
+   * overall numeric bit size
    */
   private static String format(BigInteger value, int bits) {
-    return String.format("%0"+bits/4+"x", value);
+    return String.format("%0" + bits / 4 + "x", value);
   }
 
 }

@@ -74,6 +74,23 @@ public class WorkAllocationPartitionServiceTest {
         "8000000000000000000000000000000000000000000000000000000000000000",
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
         "2");
+
+    final List<KeyRange> ranges = service.getPartitions(WorkAllocationRealm.PRESENCE_MONITOR)
+        .get();
+
+    assertThat(ranges, hasSize(2));
+    assertEquals(
+        new KeyRange()
+        .setStart("0000000000000000000000000000000000000000000000000000000000000000")
+        .setEnd("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+        ranges.get(0)
+    );
+    assertEquals(
+        new KeyRange()
+        .setStart("8000000000000000000000000000000000000000000000000000000000000000")
+        .setEnd("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+        ranges.get(1)
+    );
   }
 
   private void assertRangeAt(String expectedStart, String expectedEnd, String id)
