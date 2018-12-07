@@ -4,9 +4,9 @@ An example of a user story that drove the key design below:
 
 > As a system admin, I want to declare a new version of filebeat for device owners to install
 
-> As a device owner, I want filebeat v6.3.2 running on all my os=linux nodes
+> As a device owner, I want filebeat v6.3.2 running on all my os=linux resources
 
-> As a device owner, I want to gather the `/var/log/messages` logs from all my os=linux nodes using the filebeat agent
+> As a device owner, I want to gather the `/var/log/messages` logs from all my os=linux resources using the filebeat agent
 
 ## Organizational Patterns
 

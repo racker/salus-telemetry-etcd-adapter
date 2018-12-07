@@ -39,8 +39,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
-import com.rackspace.salus.telemetry.model.NodeConnectionStatus;
-import com.rackspace.salus.telemetry.model.NodeInfo;
+import com.rackspace.salus.telemetry.model.ResourceConnectionStatus;
+import com.rackspace.salus.telemetry.model.ResourceInfo;
 import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import org.junit.*;
 import org.junit.runner.RunWith;
@@ -56,10 +56,10 @@ import org.springframework.test.context.junit4.SpringRunner;
 @RunWith(SpringRunner.class)
 @SpringBootTest(webEnvironment = WebEnvironment.NONE)
 @JsonTest // sets up ObjectMapper
-public class EnvoyNodeManagementTest {
+public class EnvoyResourceManagementTest {
 
     @Configuration
-    @Import({KeyHashing.class, EnvoyNodeManagement.class})
+    @Import({KeyHashing.class, EnvoyResourceManagement.class})
     public static class TestConfig {
         @Bean
         public Client getClient() {
@@ -84,7 +84,7 @@ public class EnvoyNodeManagementTest {
 
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
     @Autowired
-    EnvoyNodeManagement envoyNodeManagement;
+    EnvoyResourceManagement envoyResourceManagement;
 
     @Test
     public void testRegisterAndRemove() {
@@ -112,10 +112,10 @@ public class EnvoyNodeManagementTest {
             address = null;
         }
 
-        String nodeKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
-        final String nodeKeyHash = hashing.hash(nodeKey);
+        String resourceKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
+        final String resourceKeyHash = hashing.hash(resourceKey);
 
-        NodeInfo nodeInfo = new NodeInfo()
+        ResourceInfo resourceInfo = new ResourceInfo()
                 .setEnvoyId(envoyId)
                 .setIdentifier(identifier)
                 .setIdentifierValue(identifierValue)
@@ -126,20 +126,20 @@ public class EnvoyNodeManagementTest {
         String identifierPath = String.format("/tenants/%s/identifiers/%s:%s",
                 tenantId, identifier, identifierValue);
 
-        envoyNodeManagement.registerNode(tenantId, envoyId, leaseId, identifier, envoyLabels, address).join();
+        envoyResourceManagement.registerResource(tenantId, envoyId, leaseId, identifier, envoyLabels, address).join();
 
-        verifyNodeInfo("/nodes/active/" + nodeKeyHash, nodeInfo, leaseId);
-        verifyNodeInfo("/nodes/expected/" + nodeKeyHash, nodeInfo, null);
-        verifyNodeConnectionStatus(identifierPath, startedDate);
+        verifyResourceInfo("/resources/active/" + resourceKeyHash, resourceInfo, leaseId);
+        verifyResourceInfo("/resources/expected/" + resourceKeyHash, resourceInfo, null);
+        verifyResourceConnectionStatus(identifierPath, startedDate);
 
-        envoyNodeManagement.removeNode(tenantId, identifier, identifierValue).join();
+        envoyResourceManagement.removeResource(tenantId, identifier, identifierValue).join();
 
-        verifyDelete("/nodes/active/" + nodeKeyHash);
-        verifyDelete("/nodes/expected/" + nodeKeyHash);
+        verifyDelete("/resources/active/" + resourceKeyHash);
+        verifyDelete("/resources/expected/" + resourceKeyHash);
         verifyDelete(identifierPath);
     }
 
-    private void verifyNodeInfo(String k, NodeInfo v, Long leaseId) {
+    private void verifyResourceInfo(String k, ResourceInfo v, Long leaseId) {
         client.getKVClient().get(buildKey(k))
                 .thenApply(getResponse -> {
                     assertEquals("Only stored 1 item for key so should only receive 1",
@@ -147,21 +147,21 @@ public class EnvoyNodeManagementTest {
                     KeyValue storedData = getResponse.getKvs().get(0);
 
                     String key = storedData.getKey().toStringUtf8();
-                    NodeInfo nodeInfo;
+                    ResourceInfo resourceInfo;
                     try {;
-                        nodeInfo = objectMapper.readValue(storedData.getValue().getBytes(), NodeInfo.class);
+                        resourceInfo = objectMapper.readValue(storedData.getValue().getBytes(), ResourceInfo.class);
                     } catch (IOException e) {
                         assertNull("Any exception should cause a failure", e);
                         return false;
                     }
                     assertEquals(k, key);
-                    assertEquals(v.getEnvoyId(), nodeInfo.getEnvoyId());
-                    assertEquals(v.getIdentifier(), nodeInfo.getIdentifier());
-                    assertEquals(v.getIdentifierValue(), nodeInfo.getIdentifierValue());
-                    assertEquals(v.getTenantId(), nodeInfo.getTenantId());
-                    assertEquals(v.getAddress().getHostName(), nodeInfo.getAddress().getHostName());
-                    assertEquals(v.getAddress().getPort(), nodeInfo.getAddress().getPort());
-                    assertEquals(v.getLabels().size(), nodeInfo.getLabels().size());
+                    assertEquals(v.getEnvoyId(), resourceInfo.getEnvoyId());
+                    assertEquals(v.getIdentifier(), resourceInfo.getIdentifier());
+                    assertEquals(v.getIdentifierValue(), resourceInfo.getIdentifierValue());
+                    assertEquals(v.getTenantId(), resourceInfo.getTenantId());
+                    assertEquals(v.getAddress().getHostName(), resourceInfo.getAddress().getHostName());
+                    assertEquals(v.getAddress().getPort(), resourceInfo.getAddress().getPort());
+                    assertEquals(v.getLabels().size(), resourceInfo.getLabels().size());
 
                     if (leaseId != null) {
                         assertEquals(leaseId.longValue(), storedData.getLease());
@@ -170,7 +170,7 @@ public class EnvoyNodeManagementTest {
                 }).join();
     }
 
-    private void verifyNodeConnectionStatus(String k, Date startedDate) {
+    private void verifyResourceConnectionStatus(String k, Date startedDate) {
         client.getKVClient().get(buildKey(k))
                 .thenApply(getResponse -> {
                     assertEquals("Only stored 1 item for key so should only receive 1",
@@ -178,10 +178,10 @@ public class EnvoyNodeManagementTest {
                     KeyValue storedData = getResponse.getKvs().get(0);
 
                     String key = storedData.getKey().toStringUtf8();
-                    NodeConnectionStatus connectionStatus;
+                    ResourceConnectionStatus connectionStatus;
                     try {
                         connectionStatus = objectMapper.readValue(storedData.getValue().getBytes(),
-                                NodeConnectionStatus.class);
+                                ResourceConnectionStatus.class);
                     } catch (IOException e) {
                         assertNull("Any exception should cause a failure", e);
                         return false;
