@@ -142,12 +142,12 @@ public class EnvoyResourceManagement {
 
     public CompletableFuture<GetResponse> getResourcesInRange(String prefix, String min, String max) {
         return etcd.getKVClient().get(buildKey(prefix, min),
-                GetOption.newBuilder().withRange(buildKey(prefix, max)).build());
+                GetOption.newBuilder().withRange(buildKey(prefix, max + '\0')).build());
     }
 
     public Watch.Watcher getWatchOverRange(String prefix, String min, String max, long revision) {
         return etcd.getWatchClient().watch(buildKey(prefix, min),
-                WatchOption.newBuilder().withRange(buildKey(prefix, max))
+                WatchOption.newBuilder().withRange(buildKey(prefix, max + '\0'))
                         .withPrevKV(true).withRevision(revision).build());
     }
 }
