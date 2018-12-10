@@ -96,7 +96,7 @@ public class WorkAllocationPartitionServiceTest {
   private void assertRangeAt(String expectedStart, String expectedEnd, String id)
       throws ExecutionException, InterruptedException {
     final ByteSequence key = EtcdUtils
-        .buildKey(Keys.FMT_WORKALLOC_PARTITIONS, WorkAllocationRealm.PRESENCE_MONITOR, id);
+        .buildKey(Keys.FMT_WORKALLOC_REGISTRY, WorkAllocationRealm.PRESENCE_MONITOR, id);
 
     final KeyRange keyRange = client.getKVClient()
         .get(key)
