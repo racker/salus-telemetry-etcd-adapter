@@ -132,7 +132,7 @@ public class EnvoyResourceManagementTest {
         verifyResourceInfo("/resources/expected/" + resourceKeyHash, resourceInfo, null);
         verifyResourceConnectionStatus(identifierPath, startedDate);
 
-        envoyResourceManagement.removeResource(tenantId, identifier, identifierValue).join();
+        envoyResourceManagement.delete(tenantId, identifier, identifierValue).join();
 
         verifyDelete("/resources/active/" + resourceKeyHash);
         verifyDelete("/resources/expected/" + resourceKeyHash);
