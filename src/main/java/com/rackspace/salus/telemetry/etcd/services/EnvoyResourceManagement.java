@@ -65,12 +65,12 @@ public class EnvoyResourceManagement {
      *
      * Also creates a key under /tenants/../identifiers with no lease specified.
      *
-     * @param tenantId    The tenant used to authenticate the the envoy.
-     * @param envoyId     The auto-generated unique string associated to the envoy.
-     * @param leaseId     The lease used when creating the /active key.
-     * @param identifier  The key of the label used in envoy presence monitoring.
+     * @param tenantId The tenant used to authenticate the the envoy.
+     * @param envoyId The auto-generated unique string associated to the envoy.
+     * @param leaseId The lease used when creating the /active key.
+     * @param identifier The key of the label used in envoy presence monitoring.
      * @param envoyLabels All labels associated with the envoy.
-     * @param remoteAddr  The address the envoy is connecting from.
+     * @param remoteAddr The address the envoy is connecting from.
      * @return The results of an etcd PUT.
      */
     public CompletableFuture<?> registerResource(String tenantId, String envoyId, long leaseId,
@@ -122,8 +122,8 @@ public class EnvoyResourceManagement {
     /**
      * Removes all known keys for an envoy from etcd.
      *
-     * @param tenantId        The tenant used to authenticate the the envoy.
-     * @param identifier      The key of the label used in envoy presence monitoring.
+     * @param tenantId The tenant used to authenticate the the envoy.
+     * @param identifier The key of the label used in envoy presence monitoring.
      * @param identifierValue The value of the label used in envoy presence monitoring.
      * @return The results of an etcd DELETE.
      */
@@ -140,12 +140,9 @@ public class EnvoyResourceManagement {
                                 buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue)));
     }
 
-
     public CompletableFuture<GetResponse> getResourcesInRange(String prefix, String min, String max) {
-
         return etcd.getKVClient().get(buildKey(prefix, min),
                 GetOption.newBuilder().withRange(buildKey(prefix, max)).build());
-
     }
 
     public Watch.Watcher getWatchOverRange(String prefix, String min, String max, long revision) {
@@ -154,4 +151,3 @@ public class EnvoyResourceManagement {
                         .withPrevKV(true).withRevision(revision).build());
     }
 }
-
