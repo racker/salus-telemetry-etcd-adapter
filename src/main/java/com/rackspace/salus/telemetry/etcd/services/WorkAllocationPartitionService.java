@@ -50,7 +50,7 @@ public class WorkAllocationPartitionService {
   public CompletableFuture<Boolean> changePartitions(WorkAllocationRealm realm, int count) {
     Assert.isTrue(count > 0, "partition count must be greater than zero");
 
-    final ByteSequence prefix = buildKey(Keys.FMT_WORKALLOC_PARTITIONS, realm, "");
+    final ByteSequence prefix = buildKey(Keys.FMT_WORKALLOC_REGISTRY, realm, "");
 
     return etcd.getKVClient()
         .delete(
@@ -63,7 +63,7 @@ public class WorkAllocationPartitionService {
   }
 
   public CompletableFuture<List<KeyRange>> getPartitions(WorkAllocationRealm realm) {
-    final ByteSequence prefix = buildKey(Keys.FMT_WORKALLOC_PARTITIONS, realm, "");
+    final ByteSequence prefix = buildKey(Keys.FMT_WORKALLOC_REGISTRY, realm, "");
 
     return etcd.getKVClient()
         .get(
@@ -118,7 +118,7 @@ public class WorkAllocationPartitionService {
           .setEnd(format(next.subtract(BigInteger.ONE), bits));
 
       final ByteSequence key = buildKey(
-          Keys.FMT_WORKALLOC_PARTITIONS, realm, idGenerator.generate());
+          Keys.FMT_WORKALLOC_REGISTRY, realm, idGenerator.generate());
       final ByteSequence value;
       try {
         value = ByteSequence
