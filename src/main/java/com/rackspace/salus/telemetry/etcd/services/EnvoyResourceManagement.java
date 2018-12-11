@@ -77,7 +77,7 @@ public class EnvoyResourceManagement {
      * @param remoteAddr The address the envoy is connecting from.
      * @return The results of an etcd PUT.
      */
-    public CompletableFuture<?> registerResource(String tenantId, String envoyId, long leaseId,
+    public CompletableFuture<ResourceInfo> registerResource(String tenantId, String envoyId, long leaseId,
                                                  String identifier, Map<String, String> envoyLabels,
                                                  SocketAddress remoteAddr) {
         final PutOption putLeaseOption = PutOption.newBuilder()
@@ -94,10 +94,6 @@ public class EnvoyResourceManagement {
                 .setTenantId(tenantId)
                 .setAddress((InetSocketAddress) remoteAddr);
 
-        ResourceConnectionStatus resourceStatus = new ResourceConnectionStatus()
-                .setConnected(true)
-                .setLastConnectedTime(new Date());
-
         final String resourceKeyHash = hashing.hash(resourceKey);
         final ByteSequence resourceInfoBytes;
         try {
@@ -106,21 +102,27 @@ public class EnvoyResourceManagement {
             throw new RuntimeException("Failed to marshal ResourceInfo", e);
         }
 
-        final ByteSequence resourceStatusBytes;
-        try {
-            resourceStatusBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(resourceStatus));
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to marshal ResourceConnectionStatus", e);
-        }
-
         return etcd.getKVClient().put(
                 buildKey(Keys.FMT_RESOURCES_EXPECTED, resourceKeyHash), resourceInfoBytes)
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
                                 buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue), resourceInfoBytes))
+                .thenApply(putResponse -> {
+                    if (envoyId == null) {
+                        return resourceInfo;
+                    }
+                    return putResponse;
+                })
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
-                                buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash), resourceInfoBytes, putLeaseOption));
+                                buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash), resourceInfoBytes, putLeaseOption)
+                                .thenApply(response -> resourceInfo));
+    }
+
+    public CompletableFuture<ResourceInfo> create(String tenantId, ResourceInfo resource) {
+        resource.setTenantId(tenantId);
+        return registerResource(tenantId,null, 0L, resource.getIdentifier(),
+                                resource.getLabels(), null);
     }
 
     /**
