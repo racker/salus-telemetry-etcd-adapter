@@ -26,6 +26,11 @@ import com.coreos.jetcd.data.ByteSequence;
 import com.coreos.jetcd.data.KeyValue;
 import com.coreos.jetcd.options.GetOption;
 import com.coreos.jetcd.options.PutOption;
+import com.coreos.jetcd.Watch;
+import com.coreos.jetcd.kv.GetResponse;
+import com.coreos.jetcd.options.GetOption;
+import com.coreos.jetcd.options.WatchOption;
+import com.coreos.jetcd.watch.WatchResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
@@ -192,4 +197,14 @@ public class EnvoyResourceManagement {
                 }).collect(Collectors.toList());
     }
 
+    public CompletableFuture<GetResponse> getResourcesInRange(String prefix, String min, String max) {
+        return etcd.getKVClient().get(buildKey(prefix, min),
+                GetOption.newBuilder().withRange(buildKey(prefix, max + '\0')).build());
+    }
+
+    public Watch.Watcher getWatchOverRange(String prefix, String min, String max, long revision) {
+        return etcd.getWatchClient().watch(buildKey(prefix, min),
+                WatchOption.newBuilder().withRange(buildKey(prefix, max + '\0'))
+                        .withPrevKV(true).withRevision(revision).build());
+    }
 }
