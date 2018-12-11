@@ -19,25 +19,30 @@
 package com.rackspace.salus.telemetry.etcd.services;
 
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
+import static com.rackspace.salus.telemetry.etcd.EtcdUtils.parseValue;
 
 import com.coreos.jetcd.Client;
 import com.coreos.jetcd.data.ByteSequence;
+import com.coreos.jetcd.data.KeyValue;
+import com.coreos.jetcd.options.GetOption;
 import com.coreos.jetcd.options.PutOption;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
-import com.rackspace.salus.telemetry.model.ResourceConnectionStatus;
 import com.rackspace.salus.telemetry.model.ResourceInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -68,7 +73,7 @@ public class EnvoyResourceManagement {
      * @param remoteAddr The address the envoy is connecting from.
      * @return The results of an etcd PUT.
      */
-    public CompletableFuture<?> registerResource(String tenantId, String envoyId, long leaseId,
+    public CompletableFuture<ResourceInfo> registerResource(String tenantId, String envoyId, long leaseId,
                                                  String identifier, Map<String, String> envoyLabels,
                                                  SocketAddress remoteAddr) {
         final PutOption putLeaseOption = PutOption.newBuilder()
@@ -85,10 +90,6 @@ public class EnvoyResourceManagement {
                 .setTenantId(tenantId)
                 .setAddress((InetSocketAddress) remoteAddr);
 
-        ResourceConnectionStatus resourceStatus = new ResourceConnectionStatus()
-                .setConnected(true)
-                .setLastConnectedTime(new Date());
-
         final String resourceKeyHash = hashing.hash(resourceKey);
         final ByteSequence resourceInfoBytes;
         try {
@@ -97,21 +98,27 @@ public class EnvoyResourceManagement {
             throw new RuntimeException("Failed to marshal ResourceInfo", e);
         }
 
-        final ByteSequence resourceStatusBytes;
-        try {
-            resourceStatusBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(resourceStatus));
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to marshal ResourceConnectionStatus", e);
-        }
-
         return etcd.getKVClient().put(
                 buildKey(Keys.FMT_RESOURCES_EXPECTED, resourceKeyHash), resourceInfoBytes)
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
-                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue), resourceStatusBytes))
+                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue), resourceInfoBytes))
+                .thenApply(putResponse -> {
+                    if (envoyId == null) {
+                        return resourceInfo;
+                    }
+                    return putResponse;
+                })
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
-                                buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash), resourceInfoBytes, putLeaseOption));
+                                buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash), resourceInfoBytes, putLeaseOption)
+                                .thenApply(response -> resourceInfo));
+    }
+
+    public CompletableFuture<ResourceInfo> create(String tenantId, ResourceInfo resource) {
+        resource.setTenantId(tenantId);
+        return registerResource(tenantId,null, 0L, resource.getIdentifier(),
+                                resource.getLabels(), null);
     }
 
     /**
@@ -122,7 +129,7 @@ public class EnvoyResourceManagement {
      * @param identifierValue The value of the label used in envoy presence monitoring.
      * @return The results of an etcd DELETE.
      */
-    public CompletableFuture<?> removeResource(String tenantId, String identifier, String identifierValue) {
+    public CompletableFuture<?> delete(String tenantId, String identifier, String identifierValue) {
         String resourceKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
         final String resourceKeyHash = hashing.hash(resourceKey);
         return etcd.getKVClient().delete(
@@ -132,6 +139,57 @@ public class EnvoyResourceManagement {
                                 buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash)))
                 .thenCompose(delResponse ->
                         etcd.getKVClient().delete(
-                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue)));
+                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue))
+                .thenApply(deleteResponse -> {
+                    if (deleteResponse.getDeleted() == 0) {
+                        return null;
+                    }
+                    return deleteResponse;
+                }));
     }
+
+    public CompletableFuture<List<ResourceInfo>> getOne(String tenantId, String identifier, String identifierValue) {
+        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue);
+        return etcd.getKVClient().get(key)
+                .thenApply(getResponse -> {
+                    log.debug("Found {} resources for tenant {} with identifier {} and value {}", getResponse.getKvs().size(), tenantId, identifier, identifierValue);
+                    return parseResourceInfo(getResponse.getKvs());
+                });
+    }
+
+    public CompletableFuture<List<ResourceInfo>> getSome(String tenantId, String identifier) {
+        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_IDENTIFIERS_BY_IDENTIFIER, tenantId, identifier);
+        return etcd.getKVClient().get(key,
+                GetOption.newBuilder()
+                        .withPrefix(key)
+                        .build())
+                .thenApply(getResponse -> {
+                    log.debug("Found {} resources for tenant {} with identifier {}", getResponse.getKvs().size(), tenantId, identifier);
+                    return parseResourceInfo(getResponse.getKvs());
+                });
+    }
+
+    public CompletableFuture<List<ResourceInfo>> getAll(String tenantId) {
+        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_IDENTIFIERS_BY_TENANT, tenantId);
+        return etcd.getKVClient().get(key,
+                GetOption.newBuilder()
+                        .withPrefix(key)
+                        .build())
+                .thenApply(getResponse -> {
+                    log.debug("Found {} resources for tenant {}", getResponse.getKvs().size(), tenantId);
+                    return parseResourceInfo(getResponse.getKvs());
+                });
+    }
+
+    private List<ResourceInfo> parseResourceInfo(List<KeyValue> kvs) {
+        return kvs.stream()
+                .map(keyValue -> {
+                    try {
+                        return parseValue(objectMapper, keyValue, ResourceInfo.class);
+                    } catch (IOException e) {
+                        throw new RuntimeException("Failed to parse object", e);
+                    }
+                }).collect(Collectors.toList());
+    }
+
 }
