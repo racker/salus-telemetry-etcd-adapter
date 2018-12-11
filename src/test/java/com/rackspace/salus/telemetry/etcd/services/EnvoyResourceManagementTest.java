@@ -31,7 +31,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +38,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
-import com.rackspace.salus.telemetry.model.ResourceConnectionStatus;
 import com.rackspace.salus.telemetry.model.ResourceInfo;
 import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import org.junit.*;
@@ -88,7 +86,6 @@ public class EnvoyResourceManagementTest {
 
     @Test
     public void testRegisterAndRemove() {
-        Date startedDate = new Date();
         Map<String, String> envoyLabels = new HashMap<>();
         envoyLabels.put("os", "LINUX");
         envoyLabels.put("arch", "X86_64");
@@ -130,7 +127,7 @@ public class EnvoyResourceManagementTest {
 
         verifyResourceInfo("/resources/active/" + resourceKeyHash, resourceInfo, leaseId);
         verifyResourceInfo("/resources/expected/" + resourceKeyHash, resourceInfo, null);
-        verifyResourceConnectionStatus(identifierPath, startedDate);
+        verifyResourceInfo(identifierPath, resourceInfo, null);
 
         envoyResourceManagement.delete(tenantId, identifier, identifierValue).join();
 
@@ -148,7 +145,7 @@ public class EnvoyResourceManagementTest {
 
                     String key = storedData.getKey().toStringUtf8();
                     ResourceInfo resourceInfo;
-                    try {;
+                    try {
                         resourceInfo = objectMapper.readValue(storedData.getValue().getBytes(), ResourceInfo.class);
                     } catch (IOException e) {
                         assertNull("Any exception should cause a failure", e);
@@ -166,30 +163,6 @@ public class EnvoyResourceManagementTest {
                     if (leaseId != null) {
                         assertEquals(leaseId.longValue(), storedData.getLease());
                     }
-                    return true;
-                }).join();
-    }
-
-    private void verifyResourceConnectionStatus(String k, Date startedDate) {
-        client.getKVClient().get(buildKey(k))
-                .thenApply(getResponse -> {
-                    assertEquals("Only stored 1 item for key so should only receive 1",
-                            1, getResponse.getCount());
-                    KeyValue storedData = getResponse.getKvs().get(0);
-
-                    String key = storedData.getKey().toStringUtf8();
-                    ResourceConnectionStatus connectionStatus;
-                    try {
-                        connectionStatus = objectMapper.readValue(storedData.getValue().getBytes(),
-                                ResourceConnectionStatus.class);
-                    } catch (IOException e) {
-                        assertNull("Any exception should cause a failure", e);
-                        return false;
-                    }
-                    assertEquals(k, key);
-                    assertTrue(connectionStatus.isConnected());
-                    assertTrue(connectionStatus.getLastConnectedTime().after(startedDate));
-
                     return true;
                 }).join();
     }
