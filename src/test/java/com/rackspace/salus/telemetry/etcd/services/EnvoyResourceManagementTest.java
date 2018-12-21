@@ -92,8 +92,8 @@ public class EnvoyResourceManagementTest {
 
         String envoyId = "abcde";
         String tenantId = "123456";
-        String identifier = "os";
-        String identifierValue = envoyLabels.get(identifier);
+        String identifierName = "os";
+        String identifierValue = envoyLabels.get(identifierName);
         long leaseId = 0;
         try {
             leaseId = client.getLeaseClient().grant(10000)
@@ -109,27 +109,27 @@ public class EnvoyResourceManagementTest {
             address = null;
         }
 
-        String resourceKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
+        String resourceKey = String.format("%s:%s:%s", tenantId, identifierName, identifierValue);
         final String resourceKeyHash = hashing.hash(resourceKey);
 
         ResourceInfo resourceInfo = new ResourceInfo()
                 .setEnvoyId(envoyId)
-                .setIdentifier(identifier)
+                .setIdentifierName(identifierName)
                 .setIdentifierValue(identifierValue)
                 .setLabels(envoyLabels)
                 .setTenantId(tenantId)
                 .setAddress(address);
 
         String identifierPath = String.format("/tenants/%s/identifiers/%s:%s",
-                tenantId, identifier, identifierValue);
+                tenantId, identifierName, identifierValue);
 
-        envoyResourceManagement.registerResource(tenantId, envoyId, leaseId, identifier, envoyLabels, address).join();
+        envoyResourceManagement.registerResource(tenantId, envoyId, leaseId, identifierName, envoyLabels, address).join();
 
         verifyResourceInfo("/resources/active/" + resourceKeyHash, resourceInfo, leaseId);
         verifyResourceInfo("/resources/expected/" + resourceKeyHash, resourceInfo, null);
         verifyResourceInfo(identifierPath, resourceInfo, null);
 
-        envoyResourceManagement.delete(tenantId, identifier, identifierValue).join();
+        envoyResourceManagement.delete(tenantId, identifierName, identifierValue).join();
 
         verifyDelete("/resources/active/" + resourceKeyHash);
         verifyDelete("/resources/expected/" + resourceKeyHash);
@@ -153,7 +153,7 @@ public class EnvoyResourceManagementTest {
                     }
                     assertEquals(k, key);
                     assertEquals(v.getEnvoyId(), resourceInfo.getEnvoyId());
-                    assertEquals(v.getIdentifier(), resourceInfo.getIdentifier());
+                    assertEquals(v.getIdentifierName(), resourceInfo.getIdentifierName());
                     assertEquals(v.getIdentifierValue(), resourceInfo.getIdentifierValue());
                     assertEquals(v.getTenantId(), resourceInfo.getTenantId());
                     assertEquals(v.getAddress().getHostName(), resourceInfo.getAddress().getHostName());
