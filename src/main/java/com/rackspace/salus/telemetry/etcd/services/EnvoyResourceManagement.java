@@ -73,23 +73,23 @@ public class EnvoyResourceManagement {
      * @param tenantId The tenant used to authenticate the the envoy.
      * @param envoyId The auto-generated unique string associated to the envoy.
      * @param leaseId The lease used when creating the /active key.
-     * @param identifier The key of the label used in envoy presence monitoring.
+     * @param identifierName The key of the label used in envoy presence monitoring.
      * @param envoyLabels All labels associated with the envoy.
      * @param remoteAddr The address the envoy is connecting from.
      * @return The results of an etcd PUT.
      */
     public CompletableFuture<ResourceInfo> registerResource(String tenantId, String envoyId, long leaseId,
-                                                 String identifier, Map<String, String> envoyLabels,
+                                                 String identifierName, Map<String, String> envoyLabels,
                                                  SocketAddress remoteAddr) {
         final PutOption putLeaseOption = PutOption.newBuilder()
                 .withLeaseId(leaseId)
                 .build();
 
-        String identifierValue = envoyLabels.get(identifier);
-        String resourceKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
+        String identifierValue = envoyLabels.get(identifierName);
+        String resourceKey = String.format("%s:%s:%s", tenantId, identifierName, identifierValue);
         ResourceInfo resourceInfo = new ResourceInfo()
                 .setEnvoyId(envoyId)
-                .setIdentifier(identifier)
+                .setIdentifierName(identifierName)
                 .setIdentifierValue(identifierValue)
                 .setLabels(envoyLabels)
                 .setTenantId(tenantId)
@@ -107,7 +107,7 @@ public class EnvoyResourceManagement {
                 buildKey(Keys.FMT_RESOURCES_EXPECTED, resourceKeyHash), resourceInfoBytes)
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
-                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue), resourceInfoBytes))
+                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifierName, identifierValue), resourceInfoBytes))
                 .thenApply(putResponse -> {
                     if (envoyId == null) {
                         return resourceInfo;
@@ -122,7 +122,7 @@ public class EnvoyResourceManagement {
 
     public CompletableFuture<ResourceInfo> create(String tenantId, ResourceInfo resource) {
         resource.setTenantId(tenantId);
-        return registerResource(tenantId,null, 0L, resource.getIdentifier(),
+        return registerResource(tenantId,null, 0L, resource.getIdentifierName(),
                                 resource.getLabels(), null);
     }
 
@@ -130,12 +130,12 @@ public class EnvoyResourceManagement {
      * Removes all known keys for an envoy from etcd.
      *
      * @param tenantId The tenant used to authenticate the the envoy.
-     * @param identifier The key of the label used in envoy presence monitoring.
+     * @param identifierName The key of the label used in envoy presence monitoring.
      * @param identifierValue The value of the label used in envoy presence monitoring.
      * @return The results of an etcd DELETE.
      */
-    public CompletableFuture<?> delete(String tenantId, String identifier, String identifierValue) {
-        String resourceKey = String.format("%s:%s:%s", tenantId, identifier, identifierValue);
+    public CompletableFuture<?> delete(String tenantId, String identifierName, String identifierValue) {
+        String resourceKey = String.format("%s:%s:%s", tenantId, identifierName, identifierValue);
         final String resourceKeyHash = hashing.hash(resourceKey);
         return etcd.getKVClient().delete(
                 buildKey(Keys.FMT_RESOURCES_EXPECTED, resourceKeyHash))
@@ -144,7 +144,7 @@ public class EnvoyResourceManagement {
                                 buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash)))
                 .thenCompose(delResponse ->
                         etcd.getKVClient().delete(
-                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue))
+                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifierName, identifierValue))
                 .thenApply(deleteResponse -> {
                     if (deleteResponse.getDeleted() == 0) {
                         return null;
@@ -153,23 +153,23 @@ public class EnvoyResourceManagement {
                 }));
     }
 
-    public CompletableFuture<List<ResourceInfo>> getOne(String tenantId, String identifier, String identifierValue) {
-        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifier, identifierValue);
+    public CompletableFuture<List<ResourceInfo>> getOne(String tenantId, String identifierName, String identifierValue) {
+        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifierName, identifierValue);
         return etcd.getKVClient().get(key)
                 .thenApply(getResponse -> {
-                    log.debug("Found {} resources for tenant {} with identifier {} and value {}", getResponse.getKvs().size(), tenantId, identifier, identifierValue);
+                    log.debug("Found {} resources for tenant {} with identifierName {} and value {}", getResponse.getKvs().size(), tenantId, identifierName, identifierValue);
                     return parseResourceInfo(getResponse.getKvs());
                 });
     }
 
-    public CompletableFuture<List<ResourceInfo>> getSome(String tenantId, String identifier) {
-        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_IDENTIFIERS_BY_IDENTIFIER, tenantId, identifier);
+    public CompletableFuture<List<ResourceInfo>> getSome(String tenantId, String identifierName) {
+        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_IDENTIFIERS_BY_IDENTIFIER, tenantId, identifierName);
         return etcd.getKVClient().get(key,
                 GetOption.newBuilder()
                         .withPrefix(key)
                         .build())
                 .thenApply(getResponse -> {
-                    log.debug("Found {} resources for tenant {} with identifier {}", getResponse.getKvs().size(), tenantId, identifier);
+                    log.debug("Found {} resources for tenant {} with identifierName {}", getResponse.getKvs().size(), tenantId, identifierName);
                     return parseResourceInfo(getResponse.getKvs());
                 });
     }
