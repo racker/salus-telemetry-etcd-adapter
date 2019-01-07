@@ -161,7 +161,7 @@
     <snapshotRepository>
         <id>snapshots</id>
         <name>artifactory-artifactory-0-snapshots</name>
-        <url>http://104.196.45.151:80/artifactory/libs-snapshot-local</url>
+        <url>https://salus-artifactory.dev.monplat.rackspace.net/artifactory/libs-snapshot-local</url>
     </snapshotRepository>
 </distributionManagement>
 
