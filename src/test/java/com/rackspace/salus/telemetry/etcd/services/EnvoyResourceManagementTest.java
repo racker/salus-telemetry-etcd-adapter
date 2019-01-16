@@ -19,13 +19,16 @@
 package com.rackspace.salus.telemetry.etcd.services;
 
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import com.coreos.jetcd.Client;
 import com.coreos.jetcd.data.KeyValue;
 import com.coreos.jetcd.lease.LeaseGrantResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
+import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
+import com.rackspace.salus.telemetry.model.ResourceInfo;
+import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -36,24 +39,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-
-import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
-import com.rackspace.salus.telemetry.model.ResourceInfo;
-import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
-import org.junit.*;
+import org.junit.ClassRule;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.json.JsonTest;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.junit4.SpringRunner;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest(webEnvironment = WebEnvironment.NONE)
-@JsonTest // sets up ObjectMapper
+@JsonTest
 public class EnvoyResourceManagementTest {
 
     @Configuration
