@@ -10,7 +10,7 @@ import com.coreos.jetcd.Client;
 import com.coreos.jetcd.data.ByteSequence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
-import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
+import com.rackspace.salus.common.util.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.types.KeyRange;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
 import com.rackspace.salus.telemetry.etcd.types.WorkAllocationRealm;
