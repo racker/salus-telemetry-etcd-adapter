@@ -26,7 +26,7 @@ import com.coreos.jetcd.Client;
 import com.coreos.jetcd.data.KeyValue;
 import com.coreos.jetcd.lease.LeaseGrantResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rackspace.salus.telemetry.etcd.config.KeyHashing;
+import com.rackspace.salus.common.util.KeyHashing;
 import com.rackspace.salus.telemetry.model.ResourceInfo;
 import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import java.io.IOException;
