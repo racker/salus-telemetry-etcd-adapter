@@ -19,14 +19,17 @@
 package com.rackspace.salus.telemetry.etcd;
 
 import com.coreos.jetcd.Client;
+import com.rackspace.salus.common.util.KeyHashing;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Profile;
 
 @SpringBootConfiguration
 @ComponentScan
+@Import(KeyHashing.class)
 public class TelemetryCoreEtcdModule {
 
     private final EtcdProperties properties;
