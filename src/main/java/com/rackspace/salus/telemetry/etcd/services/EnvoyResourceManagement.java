@@ -22,23 +22,19 @@ import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.parseValue;
 
 import com.coreos.jetcd.Client;
+import com.coreos.jetcd.Watch;
 import com.coreos.jetcd.data.ByteSequence;
 import com.coreos.jetcd.data.KeyValue;
+import com.coreos.jetcd.kv.GetResponse;
 import com.coreos.jetcd.options.GetOption;
 import com.coreos.jetcd.options.PutOption;
-import com.coreos.jetcd.Watch;
-import com.coreos.jetcd.kv.GetResponse;
 import com.coreos.jetcd.options.WatchOption;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.common.util.KeyHashing;
+import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
 import com.rackspace.salus.telemetry.model.ResourceInfo;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -46,6 +42,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
@@ -71,24 +70,22 @@ public class EnvoyResourceManagement {
      * @param tenantId The tenant used to authenticate the the envoy.
      * @param envoyId The auto-generated unique string associated to the envoy.
      * @param leaseId The lease used when creating the /active key.
-     * @param identifierName The key of the label used in envoy presence monitoring.
+     * @param resourceId The identifier of the resource where the Envoy is running.
      * @param envoyLabels All labels associated with the envoy.
      * @param remoteAddr The address the envoy is connecting from.
      * @return The results of an etcd PUT.
      */
     public CompletableFuture<ResourceInfo> registerResource(String tenantId, String envoyId, long leaseId,
-                                                 String identifierName, Map<String, String> envoyLabels,
+                                                 String resourceId, Map<String, String> envoyLabels,
                                                  SocketAddress remoteAddr) {
         final PutOption putLeaseOption = PutOption.newBuilder()
                 .withLeaseId(leaseId)
                 .build();
 
-        String identifierValue = envoyLabels.get(identifierName);
-        String resourceKey = String.format("%s:%s:%s", tenantId, identifierName, identifierValue);
+        String resourceKey = String.format("%s:%s", tenantId, resourceId);
         ResourceInfo resourceInfo = new ResourceInfo()
                 .setEnvoyId(envoyId)
-                .setIdentifierName(identifierName)
-                .setIdentifierValue(identifierValue)
+                .setResourceId(resourceId)
                 .setLabels(envoyLabels)
                 .setTenantId(tenantId)
                 .setAddress((InetSocketAddress) remoteAddr);
@@ -105,7 +102,7 @@ public class EnvoyResourceManagement {
                 buildKey(Keys.FMT_RESOURCES_EXPECTED, resourceKeyHash), resourceInfoBytes)
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
-                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifierName, identifierValue), resourceInfoBytes))
+                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, resourceId), resourceInfoBytes))
                 .thenApply(putResponse -> {
                     if (envoyId == null) {
                         return resourceInfo;
@@ -120,7 +117,7 @@ public class EnvoyResourceManagement {
 
     public CompletableFuture<ResourceInfo> create(String tenantId, ResourceInfo resource) {
         resource.setTenantId(tenantId);
-        return registerResource(tenantId,null, 0L, resource.getIdentifierName(),
+        return registerResource(tenantId,null, 0L, resource.getResourceId(),
                                 resource.getLabels(), null);
     }
 
@@ -128,12 +125,11 @@ public class EnvoyResourceManagement {
      * Removes all known keys for an envoy from etcd.
      *
      * @param tenantId The tenant used to authenticate the the envoy.
-     * @param identifierName The key of the label used in envoy presence monitoring.
-     * @param identifierValue The value of the label used in envoy presence monitoring.
+     * @param resourceId The identifier of the resource where the Envoy is running.
      * @return The results of an etcd DELETE.
      */
-    public CompletableFuture<?> delete(String tenantId, String identifierName, String identifierValue) {
-        String resourceKey = String.format("%s:%s:%s", tenantId, identifierName, identifierValue);
+    public CompletableFuture<?> delete(String tenantId, String resourceId) {
+        String resourceKey = String.format("%s:%s", tenantId, resourceId);
         final String resourceKeyHash = hashing.hash(resourceKey);
         return etcd.getKVClient().delete(
                 buildKey(Keys.FMT_RESOURCES_EXPECTED, resourceKeyHash))
@@ -142,7 +138,7 @@ public class EnvoyResourceManagement {
                                 buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash)))
                 .thenCompose(delResponse ->
                         etcd.getKVClient().delete(
-                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, identifierName, identifierValue))
+                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, resourceId))
                 .thenApply(deleteResponse -> {
                     if (deleteResponse.getDeleted() == 0) {
                         return null;
