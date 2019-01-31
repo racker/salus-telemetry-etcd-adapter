@@ -174,27 +174,12 @@
     </plugins>
   </build>
 
-  <distributionManagement>
-      <snapshotRepository>
-          <id>salus-snapshot-bucket</id>
-          <url>gs://salus-220516#salus-mavenrepository/snapshot</url>
-      </snapshotRepository>
-      <repository>
-        <id>salus-release-bucket</id>
-        <url>gs://salus-220516#salus-mavenrepository/release</url>
-        <uniqueVersion>true</uniqueVersion>
-      </repository>
-  </distributionManagement>
-  <repositories>
-      <repository>
-          <id>salus-snapshot-bucket</id>
-          <url>gs://salus-220516#salus-mavenrepository/snapshot</url>
-      </repository>
-      <repository>
-          <id>salus-release-bucket</id>
-          <url>gs://salus-220516#salus-mavenrepository/release</url>
-      </repository>
-  </repositories>
-
+<distributionManagement>
+    <snapshotRepository>
+        <id>snapshots</id>
+        <name>artifactory-artifactory-0-snapshots</name>
+        <url>https://salus-artifactory.dev.monplat.rackspace.net/artifactory/libs-snapshot-local</url>
+    </snapshotRepository>
+</distributionManagement>
 
 </project>
