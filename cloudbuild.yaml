@@ -1,0 +1,19 @@
+steps:
+  - name: 'bash'
+    id: MKDIR
+    entrypoint: '/usr/local/bin/bash'
+    args:
+      - "-c"
+      - |
+        mkdir -p /workspace/blah/snapshot
+
+  - name: 'gcr.io/cloud-builders/mvn'
+    id: DEPLOY
+    args: ['deploy', '-DaltDeploymentRepository=snapshot-repo::default::file:/workspace/blah/snapshot', '-Dmaven.test.skip=true']
+    # This last step, including the -DaltDeployRepository will later be removed.
+    # Hopefully the plugin will be updated soon to correct pushing to work as
+    # well as it can pull.
+    # https://github.com/lahsivjar/gcp-storage-wagon/issues/19
+  - name: 'gcr.io/cloud-builders/gsutil'
+    id: RSYNC to GStorage
+    args: ['-m', 'rsync', '-r', '/workspace/blah/snapshot/', 'gs://salus-mavenrepository/snapshot']
