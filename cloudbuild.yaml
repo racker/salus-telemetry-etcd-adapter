@@ -1,6 +1,6 @@
 substitutions:
   _GCS_CACHE_BUCKET: salus-cache
-  _SALUS_PROJECT: salus-telemetry-auth-service
+  _SALUS_PROJECT: salus-telemetry-etcd-adapter
 
 steps:
 
