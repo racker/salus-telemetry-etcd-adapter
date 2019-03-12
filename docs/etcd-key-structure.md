@@ -38,15 +38,6 @@ An example of a user story that drove the key design below:
 ^
 ^ - each ambassador watches here, but only acts upon locally tracked envoyInstanceId's
 
-# FMT_AGENT_CONFIGS
-/tenants/{tenant}/agentConfigs/{agentType}/{agentConfigId} = AgentConfig
-
-/appliedConfigs/{selectorScope}/{tenant}/{agentConfigId}/{envoyInstanceId} = AppliedConfig
-^                                                              ^
-^                                                              ^ - leased to envoyInstanceId after ambassador observes first-put
-^
-^ - each ambassador watches here, but only acts upon locally tracked envoyInstanceId's
-
 # Eventually these two might make more sense to be stored in a RDBMS
 /agentsByType/{agentType}/{version}/{agentId} = AgentInfo
 /agentsById/{agentId} = AgentInfo
