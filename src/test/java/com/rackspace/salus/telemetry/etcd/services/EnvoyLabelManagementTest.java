@@ -43,8 +43,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.types.AgentInstallSelector;
-import com.rackspace.salus.telemetry.etcd.types.AppliedConfig;
-import com.rackspace.salus.telemetry.model.AgentConfig;
 import com.rackspace.salus.telemetry.model.AgentType;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -132,32 +130,6 @@ public class EnvoyLabelManagementTest {
         when(envoyLeaseTracking.retrieve(eq("t1"), anyString()))
             .thenReturn(CompletableFuture.completedFuture(1000L));
 
-        when(kv.put(argThat(t -> t.toStringUtf8().startsWith("/appliedConfigs")), any(), any()))
-            .thenReturn(completedPutResponse());
-
-        when(kv.delete(argThat(t -> t.toStringUtf8().startsWith("/appliedConfigs"))))
-            .thenReturn(completedDeletedResponse());
-
-        final AgentConfig ac = new AgentConfig()
-                .setId("ac1")
-                .setLabels(labels);
-
-        final AppliedConfig appliedConfig = new AppliedConfig()
-                .setId("ac1")
-                .setAgentType(AgentType.FILEBEAT);
-
-        final ByteSequence appliedConfigBytes = EtcdUtils.buildValue(objectMapper, appliedConfig);
-
-        envoyLabelManagement.applyConfig("t1", ac).toCompletableFuture().join();
-        verify(kv).put(
-                eq(ByteSequence.fromString("/appliedConfigs/ALL_OF/t1/ac1/l64")),
-                eq(appliedConfigBytes),
-                argThat(putOption -> {
-                    return putOption.getLeaseId() == 1000L;
-                })
-            );
-        envoyLabelManagement.deleteConfig("t1", ac).join();
-        verify(kv).delete(eq(buildKey("/appliedConfigs/ALL_OF/t1/ac1/l64")));
     }
 
     private CompletableFuture<GetResponse> buildGetByLabelResp(String tenantId, String name, String value, String... envoyIds) {
@@ -227,50 +199,6 @@ public class EnvoyLabelManagementTest {
                 eq(ByteSequence.fromString(k)),
                 eq(ByteSequence.fromString(v)),
                 argThat(putOption -> putOption.getLeaseId() == leaseId));
-    }
-
-    @Test
-    public void testPullConfigsForEnvoy() throws Exception {
-        final Map<String, String> labels = new HashMap<>();
-        labels.put("os", "LINUX");
-        labels.put("arch", "X86_64");
-
-
-        when(kv.get(eq(buildKey("/tenants/t1/agentConfigs")), any()))
-            .thenReturn(CompletableFuture.completedFuture(
-                new GetResponse(RangeResponse.newBuilder()
-                    .setCount(1)
-                    .addKvs(KeyValue.newBuilder()
-                        .setKey(ByteString.copyFromUtf8("/tenants/t1/agentConfigs/byId/ac1"))
-                        .setValue(ByteString.copyFromUtf8("{\n" +
-                                "  \"id\": \"ac1\",\n" +
-                                "  \"agentType\": \"FILEBEAT\",\n" +
-                                "  \"selectorScope\": \"ALL_OF\",\n" +
-                                "  \"labels\": {\n" +
-                                "    \"os\": \"LINUX\",\n" +
-                                "    \"arch\": \"X86_64\"\n" +
-                                "  }\n" +
-                                "}"))
-                        .build())
-                    .build()))
-            );
-        when(kv.put(eq(buildKey("/appliedConfigs/ALL_OF/t1/ac1/e1")), any(), any()))
-            .thenReturn(completedPutResponse());
-        envoyLabelManagement.pullConfigsForEnvoy("t1", "e1", 50L, Arrays.asList("FILEBEAT"), labels).join();
-
-        final AppliedConfig appliedConfig = new AppliedConfig()
-                .setId("ac1")
-                .setAgentType(AgentType.FILEBEAT);
-
-        final ByteSequence appliedConfigBytes = EtcdUtils.buildValue(objectMapper, appliedConfig);
-        
-        verify(kv).put(
-                eq(ByteSequence.fromString("/appliedConfigs/ALL_OF/t1/ac1/e1")),
-                eq(appliedConfigBytes),
-                argThat(putOption -> {
-                    return putOption.getLeaseId() == 50L;
-                })
-            );
     }
 
     @Test

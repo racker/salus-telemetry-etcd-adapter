@@ -35,13 +35,6 @@ public class Keys {
     public static final String FMT_AGENTS_BY_ID = "/agentsById/{agentId}";
 
     public static final String FMT_ENVOYS_BY_AGENT = "/tenants/{tenant}/envoysByAgent/{agentType}/{envoyInstanceId}";
-    public static final String FMT_AGENT_CONFIGS_PREFIX = "/tenants/{tenant}/agentConfigs";
-    public static final String FMT_AGENT_CONFIGS = FMT_AGENT_CONFIGS_PREFIX + "/byId/{agentConfigId}";
-    public static final String FMT_APPLIED_CONFIGS_PREFIX = "/appliedConfigs";
-    public static final String FMT_APPLIED_CONFIGS = FMT_APPLIED_CONFIGS_PREFIX +
-        "/{selectorScope}/{tenant}/{agentConfigId}/{envoyInstanceId}";
-    public static final Pattern PTN_APPLIED_CONFIGS = Pattern.compile(
-        "/appliedConfigs/(?<scope>.+?)/(?<tenant>.+?)/(?<agentConfigId>.+?)/(?<envoyInstanceId>.+?)");
     public static final String FMT_IDENTIFIERS = "/tenants/{tenant}/identifiers/{resourceId}";
     public static final String FMT_IDENTIFIERS_BY_TENANT = "/tenants/{tenant}/identifiers";
     public static final String FMT_IDENTIFIERS_BY_IDENTIFIER = "/tenants/{tenant}/identifiers/{identifierName}";

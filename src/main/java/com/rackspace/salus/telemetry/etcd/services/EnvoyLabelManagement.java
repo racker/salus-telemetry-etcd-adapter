@@ -39,9 +39,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.types.AgentInstallSelector;
-import com.rackspace.salus.telemetry.etcd.types.AppliedConfig;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
-import com.rackspace.salus.telemetry.model.AgentConfig;
 import com.rackspace.salus.telemetry.model.AgentType;
 import java.io.IOException;
 import java.util.Collections;
@@ -201,66 +199,6 @@ public class EnvoyLabelManagement {
                     .orElse(completedPutResponse())
                     .thenApply(putResponse -> agentInstallSelector));
     }
-
-    public CompletionStage<AgentConfig> applyConfig(String tenantId, AgentConfig agentConfig) {
-
-        final AppliedConfig appliedConfig = new AppliedConfig();
-        appliedConfig.setAgentType(agentConfig.getAgentType());
-        appliedConfig.setId(agentConfig.getId());
-        final ByteSequence appliedConfigBytes;
-        try {
-            appliedConfigBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(appliedConfig));
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to marshal AppliedConfig", e);
-        }
-        
-        return locateEnvoys(tenantId, agentConfig.getAgentType(), agentConfig.getLabels())
-            .thenCompose(envoyIds ->
-                envoyIds.stream()
-                    .map(envoyInstanceId ->
-                        envoyLeaseTracking.retrieve(tenantId, envoyInstanceId)
-                            .thenCompose(leaseId ->
-                                {
-                                    log.debug("Applying config={} to tenant={}, envoyInstance={}",
-                                        agentConfig, tenantId, envoyInstanceId);
-
-                                    return etcd.getKVClient().put(
-                                        buildKey(Keys.FMT_APPLIED_CONFIGS,
-                                            agentConfig.getSelectorScope(), tenantId, agentConfig.getId(), envoyInstanceId),
-                                        appliedConfigBytes,
-                                        PutOption.newBuilder()
-                                            .withLeaseId(leaseId)
-                                            .build()
-                                    );
-                                }
-                            )
-                    )
-                    .reduce(EtcdUtils::byComposingCompletables)
-                    .orElse(completedPutResponse())
-                    .thenApply(putResponse -> agentConfig)
-            );
-    }
-
-    public CompletableFuture<AgentConfig> deleteConfig(String tenantId, AgentConfig agentConfig) {
-        return locateEnvoys(tenantId, agentConfig.getAgentType(), agentConfig.getLabels())
-            .thenCompose(envoyIds ->
-                envoyIds.stream()
-                    .map(envoyInstanceId ->
-                        {
-                            log.debug("Deleting config={} to tenant={}, envoyInstance={}",
-                                agentConfig.getId(), tenantId, envoyInstanceId);
-
-                            return etcd.getKVClient().delete(
-                                    buildKey(Keys.FMT_APPLIED_CONFIGS,
-                                    agentConfig.getSelectorScope(),
-                                        tenantId, agentConfig.getId(), envoyInstanceId));
-                        }                    
-                    )
-                    .reduce(EtcdUtils::byComposingCompletables)
-                    .orElse(completedDeletedResponse())
-                    .thenApply(deleteResponse -> agentConfig)
-            );
-    }
     
     /**
      * Locates agent install selectors that apply to a newly attached envoy and installs highest precedent of each
@@ -313,77 +251,6 @@ public class EnvoyLabelManagement {
                     .reduce((l, r) ->
                         l.thenCompose(lCount -> r.thenApply(rCount -> lCount + rCount)))
                     .orElse(CompletableFuture.completedFuture(0)));
-    }
-
-    public CompletableFuture<Integer> pullConfigsForEnvoy(String tenantId, String envoyInstanceId, Long leaseId,
-                                                          List<String> supportedAgentTypes, Map<String, String> envoyLabels) {
-
-        /*
-            For each agent config
-                If it is one of the supported types
-                    If config applies to envoy's labels
-                        Apply the config to this envoy
-
-         */
-        final PutOption envoyLeasePutOption = PutOption.newBuilder()
-            .withLeaseId(leaseId)
-            .build();
-
-        final ByteSequence prefix = buildKey(Keys.FMT_AGENT_CONFIGS_PREFIX, tenantId);
-
-        return etcd.getKVClient().get(
-            prefix,
-            GetOption.newBuilder()
-                .withPrefix(prefix)
-                .build()
-        )
-            .thenCompose(getResponse ->
-                getResponse.getKvs().stream()
-                    .map(keyValue -> {
-                        try {
-                            return objectMapper.readValue(keyValue.getValue().getBytes(), AgentConfig.class);
-                        } catch (IOException e) {
-                            log.warn("Failed to parse AgentConfig from key={}, value={}",
-                                keyValue.getKey().toStringUtf8(), keyValue.getValue().toStringUtf8(), e);
-                            return null;
-                        }
-
-                    })
-                    .filter(Objects::nonNull)
-                    .filter(agentConfig ->
-                        supportedAgentTypes.contains(agentConfig.getAgentType().name())
-                        && mapContainsAll(envoyLabels, agentConfig.getLabels()))
-                    .map(agentConfig ->
-                        installConfigForExistingEnvoy(tenantId, envoyInstanceId, envoyLeasePutOption, agentConfig)
-                    )
-                    .reduce(EtcdUtils::byComposingCompletables)
-                    .orElse(CompletableFuture.completedFuture(0))
-            );
-    }
-
-    private CompletableFuture<Integer> installConfigForExistingEnvoy(String tenantId, String envoyInstanceId, PutOption envoyLeasePutOption, AgentConfig agentConfig) {
-        AppliedConfig appliedConfig = new AppliedConfig()
-                .setId(agentConfig.getId())
-                .setAgentType(agentConfig.getAgentType());
-        ByteSequence appliedConfigBytes;
-        try {
-            appliedConfigBytes = buildValue(objectMapper, appliedConfig);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to marshal AppliedConfig", e);
-        }
-            
-        return etcd.getKVClient().put(
-            buildKey(Keys.FMT_APPLIED_CONFIGS,
-                agentConfig.getSelectorScope(), tenantId, agentConfig.getId(), envoyInstanceId),
-            appliedConfigBytes,
-            envoyLeasePutOption
-        )
-            .thenApply(putResponse -> {
-                log.debug("Config={} installed to tenant={}, envoyInstance={}",
-                    agentConfig, tenantId, envoyInstanceId);
-
-                return 1;
-            });
     }
 
     private CompletableFuture<Integer> installAgentIfMatchesEnvoy(String tenantId, String envoyInstanceId, Long leaseId,
