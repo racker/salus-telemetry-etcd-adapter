@@ -62,8 +62,8 @@ public class EnvoyResourceManagement {
     }
 
     /**
-     * Creates the /active and /expected keys within etcd for the connected envoy.
-     * /active is created using a lease, whereas /expected will live forever.
+     * Creates the /active key within etcd for the connected envoy.
+     * /active is created using a lease.
      *
      * Also creates a key under /tenants/../identifiers with no lease specified.
      *
@@ -99,10 +99,7 @@ public class EnvoyResourceManagement {
         }
 
         return etcd.getKVClient().put(
-                buildKey(Keys.FMT_RESOURCES_EXPECTED, resourceKeyHash), resourceInfoBytes)
-                .thenCompose(putResponse ->
-                        etcd.getKVClient().put(
-                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, resourceId), resourceInfoBytes))
+                buildKey(Keys.FMT_IDENTIFIERS, tenantId, resourceId), resourceInfoBytes)
                 .thenApply(putResponse -> {
                     if (envoyId == null) {
                         return resourceInfo;
@@ -132,10 +129,7 @@ public class EnvoyResourceManagement {
         String resourceKey = String.format("%s:%s", tenantId, resourceId);
         final String resourceKeyHash = hashing.hash(resourceKey);
         return etcd.getKVClient().delete(
-                buildKey(Keys.FMT_RESOURCES_EXPECTED, resourceKeyHash))
-                .thenCompose(delResponse ->
-                        etcd.getKVClient().delete(
-                                buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash)))
+                buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash))
                 .thenCompose(delResponse ->
                         etcd.getKVClient().delete(
                                 buildKey(Keys.FMT_IDENTIFIERS, tenantId, resourceId))

@@ -121,13 +121,11 @@ public class EnvoyResourceManagementTest {
         envoyResourceManagement.registerResource(tenantId, envoyId, leaseId, resourceId, envoyLabels, address).join();
 
         verifyResourceInfo("/resources/active/" + resourceKeyHash, resourceInfo, leaseId);
-        verifyResourceInfo("/resources/expected/" + resourceKeyHash, resourceInfo, null);
         verifyResourceInfo(identifierPath, resourceInfo, null);
 
         envoyResourceManagement.delete(tenantId, resourceId).join();
 
         verifyDelete("/resources/active/" + resourceKeyHash);
-        verifyDelete("/resources/expected/" + resourceKeyHash);
         verifyDelete(identifierPath);
     }
 
