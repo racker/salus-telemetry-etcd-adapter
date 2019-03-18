@@ -39,6 +39,5 @@ public class Keys {
     public static final String FMT_IDENTIFIERS_BY_TENANT = "/tenants/{tenant}/identifiers";
     public static final String FMT_IDENTIFIERS_BY_IDENTIFIER = "/tenants/{tenant}/identifiers/{identifierName}";
     public static final String FMT_RESOURCES_ACTIVE = "/resources/active/{md5OfTenantAndIdentifierValue}";
-    public static final String FMT_RESOURCES_EXPECTED = "/resources/expected/{md5OfTenantAndIdentifierValue}";
     public static final String FMT_WORKALLOC_REGISTRY = "/workAllocations/{realm}/registry/{partitionId}";
 }
