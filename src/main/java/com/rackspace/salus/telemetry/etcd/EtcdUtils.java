@@ -168,5 +168,16 @@ public class EtcdUtils {
         );
     }
 
-
+    /**
+     * Ensures the given value is safe to use as part of a key path by doing simple encoding
+     * like HTML URL encoding to replace slashes.
+     * @param value the raw value
+     * @return the escaped version of the given value
+     */
+    public static String escapePathPart(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.replace("/", "%2F");
+    }
 }

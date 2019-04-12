@@ -24,7 +24,6 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Profile;
 
 @SpringBootConfiguration
 @ComponentScan
@@ -38,8 +37,6 @@ public class TelemetryCoreEtcdModule {
         this.properties = etcdProperties;
     }
 
-    // This is required to allow mocking of etcd during test programs
-    @Profile("!test")
     @Bean
     public Client etcdClient() {
         return Client.builder().endpoints(properties.getUrl()).build();
