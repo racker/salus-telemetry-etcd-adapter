@@ -45,5 +45,8 @@ public class Keys {
      * Value is count of bound monitors, leading zero padded to 10 digits
      */
     public static final String FMT_ZONE_ACTIVE = "/zones/active/{tenant}/{zoneId}/{pollerEnvoyId}";
+    /**
+     * Value is latest attached envoy ID
+     */
     public static final String FMT_ZONE_EXPECTED = "/zones/expected/{tenant}/{zoneId}/{resourceId}";
 }
