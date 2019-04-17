@@ -40,4 +40,13 @@ public class Keys {
     public static final String FMT_IDENTIFIERS_BY_IDENTIFIER = "/tenants/{tenant}/identifiers/{identifierName}";
     public static final String FMT_RESOURCES_ACTIVE = "/resources/active/{md5OfTenantAndIdentifierValue}";
     public static final String FMT_WORKALLOC_REGISTRY = "/workAllocations/{realm}/registry/{partitionId}";
+
+    /**
+     * Value is count of bound monitors, leading zero padded to 10 digits
+     */
+    public static final String FMT_ZONE_ACTIVE = "/zones/active/{tenant}/{zoneId}/{pollerEnvoyId}";
+    /**
+     * Value is latest attached envoy ID
+     */
+    public static final String FMT_ZONE_EXPECTED = "/zones/expected/{tenant}/{zoneId}/{resourceId}";
 }

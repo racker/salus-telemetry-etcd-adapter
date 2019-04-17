@@ -9,8 +9,8 @@ import static org.mockito.Mockito.when;
 import com.coreos.jetcd.Client;
 import com.coreos.jetcd.data.ByteSequence;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.common.util.KeyHashing;
+import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.types.KeyRange;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
 import com.rackspace.salus.telemetry.etcd.types.WorkAllocationRealm;
@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -52,6 +53,11 @@ public class WorkAllocationPartitionServiceTest {
 
     service = new WorkAllocationPartitionService(
         client, new KeyHashing(), objectMapper, idGenerator);
+  }
+
+  @After
+  public void tearDown() throws Exception {
+    client.close();
   }
 
   @Test
