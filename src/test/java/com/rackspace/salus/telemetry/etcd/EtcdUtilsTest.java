@@ -24,14 +24,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.coreos.jetcd.data.ByteSequence;
-import com.coreos.jetcd.options.PutOption;
 import com.rackspace.salus.telemetry.model.AgentType;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import org.junit.Test;
-import org.mockito.ArgumentMatcher;
-import org.mockito.ArgumentMatchers;
 
 public class EtcdUtilsTest {
 
@@ -150,52 +146,4 @@ public class EtcdUtilsTest {
         assertNull(result);
     }
 
-    public static ByteSequence equalsByteSequence(String str) {
-        return ArgumentMatchers.argThat(new ByteSequenceEquals(ByteSequence.fromString(str)));
-    }
-
-    public static ByteSequence equalsByteSequence(ByteSequence expected) {
-        return ArgumentMatchers.argThat(new ByteSequenceEquals(expected));
-    }
-
-    static class ByteSequenceEquals implements ArgumentMatcher<ByteSequence> {
-        private final ByteSequence expected;
-
-        ByteSequenceEquals(ByteSequence expected) {
-            this.expected = expected;
-        }
-
-        @Override
-        public boolean matches(ByteSequence actual) {
-            return Objects.equals(expected, actual);
-        }
-
-        @Override
-        public String toString() {
-            return String.format("[ByteSequence of '%s']", expected.toStringUtf8());
-        }
-    }
-
-    public static PutOption putOptionWithLease(long lease) {
-        return ArgumentMatchers.argThat(new PutOptionWithLease(lease));
-    }
-
-    static class PutOptionWithLease implements ArgumentMatcher<PutOption> {
-
-        private final long lease;
-
-        PutOptionWithLease(long lease) {
-            this.lease = lease;
-        }
-
-        @Override
-        public boolean matches(PutOption actual) {
-            return actual.getLeaseId() == lease;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("[PutOption with leaseId=%d]", lease);
-        }
-    }
 }
