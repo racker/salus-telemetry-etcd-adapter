@@ -133,6 +133,23 @@ public class ZoneStorageTest {
   }
 
   @Test
+  public void testIncrementBoundMoreThanOne() {
+    final long leaseId = grantLease();
+
+    ResolvedZone zone = new ResolvedZone()
+        .setId("zone-1")
+        .setTenantId("t-1");
+
+    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
+
+    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 0, leaseId);
+
+    zoneStorage.incrementBoundCount(zone, "e-1", 12).join();
+
+    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 12, leaseId);
+  }
+
+  @Test
   public void testLeastLoaded_emptyZone() {
     ResolvedZone zone = new ResolvedZone()
         .setId("zone-nowhere")

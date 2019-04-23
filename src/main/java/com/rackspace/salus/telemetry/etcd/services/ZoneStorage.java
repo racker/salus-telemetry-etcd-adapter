@@ -94,6 +94,11 @@ public class ZoneStorage {
   }
 
   public CompletableFuture<Integer> incrementBoundCount(ResolvedZone zone, String envoyId) {
+    return incrementBoundCount(zone, envoyId, 1);
+  }
+
+  public CompletableFuture<Integer> incrementBoundCount(ResolvedZone zone, String envoyId,
+                                                        int size) {
     log.debug("Incrementing bound count of envoy={} in zone={}", envoyId, zone);
 
     final ByteSequence key = buildKey(
@@ -109,7 +114,7 @@ public class ZoneStorage {
 
           final KeyValue kvEntry = getResponse.getKvs().get(0);
           final int prevCount = Integer.parseInt(kvEntry.getValue().toStringUtf8(), 10);
-          final int newCount = prevCount + 1;
+          final int newCount = prevCount + size;
 
           log.debug("Putting new bound count={} for envoy={} in zone={}", newCount, envoyId, zone);
 
@@ -141,7 +146,7 @@ public class ZoneStorage {
                       "Re-trying incrementing bound count of envoy={} in zone={} due to collision",
                       envoyId, zone
                   );
-                  return incrementBoundCount(zone, envoyId);
+                  return incrementBoundCount(zone, envoyId, size);
                 }
 
               });
