@@ -26,14 +26,20 @@ public class ResolvedZone {
 
   String id;
   String tenantId;
-  boolean publicZone;
 
-  public String getTenantId() {
-    return publicZone ? null : tenantId;
+  public ResolvedZone setPublicZone(boolean value) {
+    if (value) {
+      this.tenantId = null;
+    }
+    return this;
+  }
+
+  public boolean isPublicZone() {
+    return this.tenantId == null;
   }
 
   public String getTenantForKey() {
-    if (publicZone) {
+    if (isPublicZone()) {
       return PUBLIC;
     }
     else {
@@ -43,5 +49,23 @@ public class ResolvedZone {
 
   public String getZoneIdForKey() {
     return EtcdUtils.escapePathPart(id);
+  }
+
+  public static ResolvedZone fromKeyParts(String tenant, String zone) {
+
+    final ResolvedZone resolvedZone = new ResolvedZone()
+        .setId(EtcdUtils.unescapePathPart(zone));
+
+    if (!tenant.equals(PUBLIC)) {
+      resolvedZone
+          .setTenantId(tenant)
+          .setPublicZone(false);
+    }
+    else {
+      resolvedZone
+          .setPublicZone(true);
+    }
+
+    return resolvedZone;
   }
 }

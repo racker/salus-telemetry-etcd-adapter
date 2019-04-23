@@ -17,9 +17,11 @@
 package com.rackspace.salus.telemetry.etcd.types;
 
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
 
+import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import org.junit.Test;
 
 public class ResolvedZoneTest {
@@ -36,8 +38,8 @@ public class ResolvedZoneTest {
   @Test
   public void getTenantForKey_public() {
     final ResolvedZone zone = new ResolvedZone()
-        .setPublicZone(true)
-        .setTenantId("tenant-1");
+        .setTenantId("tenant-1")
+        .setPublicZone(true);
 
     assertThat(zone.getTenantForKey(), equalTo(ResolvedZone.PUBLIC));
   }
@@ -45,8 +47,8 @@ public class ResolvedZoneTest {
   @Test
   public void getTenantAlwaysNullForPublic() {
     final ResolvedZone zone = new ResolvedZone()
-        .setPublicZone(true)
-        .setTenantId("tenant-1");
+        .setTenantId("tenant-1")
+        .setPublicZone(true);
 
     assertThat(zone.getTenantId(), nullValue());
   }
@@ -59,5 +61,27 @@ public class ResolvedZoneTest {
         .setTenantId("tenant-1");
 
     assertThat(zone.getZoneIdForKey(), equalTo("companyName%2Fwest"));
+  }
+
+  @Test
+  public void testFromKeyParts_public() {
+    final ResolvedZone resolvedZone = ResolvedZone
+        .fromKeyParts(ResolvedZone.PUBLIC, EtcdUtils.escapePathPart("public/west"));
+
+    assertThat(resolvedZone, notNullValue());
+    assertThat(resolvedZone.isPublicZone(), equalTo(true));
+    assertThat(resolvedZone.getId(), equalTo("public/west"));
+    assertThat(resolvedZone.getTenantId(), nullValue());
+  }
+
+  @Test
+  public void testFromKeyParts_private() {
+    final ResolvedZone resolvedZone = ResolvedZone
+        .fromKeyParts("t-1", EtcdUtils.escapePathPart("custom/division1"));
+
+    assertThat(resolvedZone, notNullValue());
+    assertThat(resolvedZone.isPublicZone(), equalTo(false));
+    assertThat(resolvedZone.getId(), equalTo("custom/division1"));
+    assertThat(resolvedZone.getTenantId(), equalTo("t-1"));
   }
 }

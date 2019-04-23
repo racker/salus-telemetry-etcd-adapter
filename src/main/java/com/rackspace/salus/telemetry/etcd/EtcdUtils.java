@@ -77,6 +77,19 @@ public class EtcdUtils {
         return ByteSequence.fromString(sb.toString());
     }
 
+    public static Pattern patternFromFormat(String format) {
+        final Pattern placeholders = Pattern.compile("\\{(.+?)}");
+
+        final Matcher matcher = placeholders.matcher(format);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, String.format("(?<%s>.+?)", matcher.group(1)));
+        }
+        matcher.appendTail(sb);
+
+        return Pattern.compile(sb.toString());
+    }
+
     public static ByteString buildByteString(String format, Object... values) {
         return ByteString.copyFromUtf8(
                 String.format(format, values)
@@ -179,5 +192,17 @@ public class EtcdUtils {
             return null;
         }
         return value.replace("/", "%2F");
+    }
+
+    /**
+     * Reverses the processing of {@link #escapePathPart(String)}
+     * @param rawValue the part of an etcd key that has been escaped by {@link #escapePathPart(String)}
+     * @return the unescaped value
+     */
+    public static String unescapePathPart(String rawValue) {
+        if (rawValue == null) {
+            return rawValue;
+        }
+        return rawValue.replace("%2F", "/");
     }
 }
