@@ -129,6 +129,15 @@ public class EnvoyResourceManagementTest {
         verifyDelete(identifierPath);
     }
 
+    @Test
+    public void testgetOne_butThereIsNone() throws ExecutionException, InterruptedException {
+      final ResourceInfo result = envoyResourceManagement
+          .getOne("t-none", "r-none")
+          .get();
+
+      assertNull(result);
+    }
+
     private void verifyResourceInfo(String k, ResourceInfo v, Long leaseId) {
         client.getKVClient().get(buildKey(k))
                 .thenApply(getResponse -> {
