@@ -154,6 +154,8 @@ public class ZoneStorage {
   }
 
   public CompletableFuture<Optional<String>> findLeastLoadedEnvoy(ResolvedZone zone) {
+    log.debug("Finding least loaded envoy in zone={}", zone);
+
     final ByteSequence prefix =
         buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneIdForKey(), "");
 
