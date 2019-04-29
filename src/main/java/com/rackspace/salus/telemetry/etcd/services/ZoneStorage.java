@@ -53,6 +53,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
+/**
+ * Encapsulates the aspects of reading, updating, and watching the etcd aspect of zones.
+ * The etcd stored aspects of zones are limited to the dynamic aspects need to track the
+ * lease-bounded keys in real-time.
+ */
 @Service
 @Slf4j
 public class ZoneStorage {
@@ -195,7 +200,9 @@ public class ZoneStorage {
             Op.get(trackingKey, GetOption.DEFAULT)
         )
         .Else(
-            // otherwise, create the tracking key
+            // ...otherwise, create the tracking key since we need to bootstrap the tracking key
+            // on very first startup. In production, this is a one-time event, but also enables
+            // seamless development testing.
             Op.put(trackingKey, ByteSequence.fromString(""), PutOption.DEFAULT)
         )
         .commit()

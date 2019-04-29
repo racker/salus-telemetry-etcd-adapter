@@ -16,6 +16,8 @@
 
 package com.rackspace.salus.telemetry.etcd.types;
 
+import static com.rackspace.salus.telemetry.etcd.types.ResolvedZone.createPrivateZone;
+import static com.rackspace.salus.telemetry.etcd.types.ResolvedZone.createPublicZone;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
@@ -28,37 +30,28 @@ public class ResolvedZoneTest {
 
   @Test
   public void getTenantForKey_nonPublic() {
-    final ResolvedZone zone = new ResolvedZone()
-        .setPublicZone(false)
-        .setTenantId("tenant-1");
+    final ResolvedZone zone = createPrivateZone("tenant-1", "z-1");
 
     assertThat(zone.getTenantForKey(), equalTo("tenant-1"));
   }
 
   @Test
   public void getTenantForKey_public() {
-    final ResolvedZone zone = new ResolvedZone()
-        .setTenantId("tenant-1")
-        .setPublicZone(true);
+    final ResolvedZone zone = createPublicZone("z-1");
 
     assertThat(zone.getTenantForKey(), equalTo(ResolvedZone.PUBLIC));
   }
 
   @Test
   public void getTenantAlwaysNullForPublic() {
-    final ResolvedZone zone = new ResolvedZone()
-        .setTenantId("tenant-1")
-        .setPublicZone(true);
+    final ResolvedZone zone = createPublicZone("z-1");
 
     assertThat(zone.getTenantId(), nullValue());
   }
 
   @Test
   public void getZoneIdForKey() {
-    final ResolvedZone zone = new ResolvedZone()
-        .setId("companyName/west")
-        .setPublicZone(true)
-        .setTenantId("tenant-1");
+    final ResolvedZone zone = createPublicZone("companyName/west");
 
     assertThat(zone.getZoneIdForKey(), equalTo("companyName%2Fwest"));
   }

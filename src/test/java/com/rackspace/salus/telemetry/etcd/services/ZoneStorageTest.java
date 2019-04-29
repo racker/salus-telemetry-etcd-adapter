@@ -16,6 +16,7 @@
 
 package com.rackspace.salus.telemetry.etcd.services;
 
+import static com.rackspace.salus.telemetry.etcd.types.ResolvedZone.createPrivateZone;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThan;
@@ -76,9 +77,7 @@ public class ZoneStorageTest {
 
     final long leaseId = grantLease();
 
-    ResolvedZone zone = new ResolvedZone()
-        .setId("zone-1")
-        .setTenantId("t-1");
+    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
     zoneStorage.registerEnvoyInZone(zone, "123-456", "r-1", leaseId).join();
 
     final GetResponse activeResponse = client.getKVClient()
@@ -101,9 +100,7 @@ public class ZoneStorageTest {
     // just use one lease for all three
     final long leaseId = grantLease();
 
-    ResolvedZone zone = new ResolvedZone()
-        .setId("zone-1")
-        .setTenantId("t-1");
+    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
 
     zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
     zoneStorage.registerEnvoyInZone(zone, "e-2", "r-2", leaseId).join();
@@ -136,9 +133,7 @@ public class ZoneStorageTest {
   public void testIncrementBoundMoreThanOne() {
     final long leaseId = grantLease();
 
-    ResolvedZone zone = new ResolvedZone()
-        .setId("zone-1")
-        .setTenantId("t-1");
+    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
 
     zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
 
@@ -151,9 +146,7 @@ public class ZoneStorageTest {
 
   @Test
   public void testLeastLoaded_emptyZone() {
-    ResolvedZone zone = new ResolvedZone()
-        .setId("zone-nowhere")
-        .setTenantId("t-none");
+    final ResolvedZone zone = createPrivateZone("t-none", "zone-nowhere");
 
     final Optional<String> leastLoaded = zoneStorage.findLeastLoadedEnvoy(zone).join();
     assertThat(leastLoaded.isPresent(), equalTo(false));
@@ -161,9 +154,7 @@ public class ZoneStorageTest {
 
   @Test
   public void testNewExpectedEnvoyResource() throws ExecutionException, InterruptedException {
-    registerAndWatchExpected(new ResolvedZone()
-        .setTenantId("t-1")
-        .setId("z-1"), "r-1", "t-1");
+    registerAndWatchExpected(createPrivateZone("t-1", "z-1"), "r-1", "t-1");
   }
 
   /**
@@ -174,9 +165,7 @@ public class ZoneStorageTest {
   public void testResumingExpectedEnvoyWatch() throws ExecutionException, InterruptedException {
     final String tenant = testName.getMethodName();
 
-    final ResolvedZone resolvedZone = new ResolvedZone()
-        .setTenantId(tenant)
-        .setId("z-1");
+    final ResolvedZone resolvedZone = createPrivateZone(tenant, "z-1");
 
     registerAndWatchExpected(resolvedZone, "r-1", tenant);
 
@@ -223,9 +212,7 @@ public class ZoneStorageTest {
   public void testWatchExpectedZones_reRegister() throws ExecutionException, InterruptedException {
     final String tenant = testName.getMethodName();
 
-    final ResolvedZone resolvedZone = new ResolvedZone()
-        .setTenantId(tenant)
-        .setId("z-1");
+    final ResolvedZone resolvedZone = createPrivateZone(tenant, "z-1");
 
     final ZoneStorageListener listener = Mockito.mock(ZoneStorageListener.class);
 
