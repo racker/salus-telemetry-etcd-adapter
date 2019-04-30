@@ -17,23 +17,50 @@
 package com.rackspace.salus.telemetry.etcd.types;
 
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
 
-@Data
+/**
+ * This class is both a data holder and utility for resolving given zone IDs and optionally
+ * owning tenant IDs. It keeps track of the distinction between public zones, which are not
+ * owned by any one tentant, and private zones, which are tenant owned. The utility portion of
+ * the class assists with etcd key-path conversion where the slashes in zone identifiers need
+ * to be converted to avoid conflicting with the slash-delimited convention of the etcd key
+ * paths.
+ */
+@Getter @ToString @EqualsAndHashCode
 public class ResolvedZone {
 
   public static final String PUBLIC = "_PUBLIC_";
 
-  String id;
-  String tenantId;
-  boolean publicZone;
+  final String id;
+  final String tenantId;
 
-  public String getTenantId() {
-    return publicZone ? null : tenantId;
+  private ResolvedZone(String zoneId) {
+    this.tenantId = null; // indicates public
+    this.id = zoneId;
+  }
+
+  private ResolvedZone(String zoneTenantId, String zoneId) {
+    this.tenantId = zoneTenantId;
+    this.id = zoneId;
+  }
+
+  public static ResolvedZone createPublicZone(String zoneId) {
+    return new ResolvedZone(zoneId);
+  }
+
+  public static ResolvedZone createPrivateZone(String zoneTenantId, String zoneId) {
+    return new ResolvedZone(zoneTenantId, zoneId);
+  }
+
+  public boolean isPublicZone() {
+    return this.tenantId == null;
   }
 
   public String getTenantForKey() {
-    if (publicZone) {
+    if (isPublicZone()) {
       return PUBLIC;
     }
     else {
@@ -43,5 +70,16 @@ public class ResolvedZone {
 
   public String getZoneIdForKey() {
     return EtcdUtils.escapePathPart(id);
+  }
+
+  public static ResolvedZone fromKeyParts(String tenant, String zone) {
+
+    final String correctedZoneId = EtcdUtils.unescapePathPart(zone);
+    if (!tenant.equals(PUBLIC)) {
+      return createPrivateZone(tenant, correctedZoneId);
+    }
+    else {
+      return createPublicZone(correctedZoneId);
+    }
   }
 }

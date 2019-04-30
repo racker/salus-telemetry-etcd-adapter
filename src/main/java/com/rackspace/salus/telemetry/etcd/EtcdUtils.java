@@ -36,6 +36,10 @@ import java.util.function.BinaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * This class contains various utility methods that simplify tedious code needed
+ * for interacting with etcd.
+ */
 public class EtcdUtils {
 
     private static final Pattern KEY_PLACEHOLDER = Pattern.compile("\\{.+?\\}");
@@ -75,6 +79,35 @@ public class EtcdUtils {
         matcher.appendTail(sb);
 
         return ByteSequence.fromString(sb.toString());
+    }
+
+    /**
+     * This method converts a format string with <code>{...}</code> placeholders into a 
+     * regex pattern with capture groups named for each format placeholder.
+     * <p>
+     *   For example, given the format string
+     *   <pre>
+     *     /zones/expected/{tenant}/{zoneId}/{resourceId}
+     *   </pre>
+     *   then this method will produce a regex pattern:
+     *   <pre>
+     *     /zones/expected/(?&lt;tenant&gt;.+?)/(?&lt;zoneId&gt;.+?)/(?&lt;resourceId&gt;.+?)
+     *   </pre>
+     * </p>
+     * @param format a <code>{...}</code> format string
+     * @return a regex pattern that can parse the given <code>format</code>
+     */
+    public static Pattern patternFromFormat(String format) {
+        final Pattern placeholders = Pattern.compile("\\{(.+?)}");
+
+        final Matcher matcher = placeholders.matcher(format);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, String.format("(?<%s>.+?)", matcher.group(1)));
+        }
+        matcher.appendTail(sb);
+
+        return Pattern.compile(sb.toString());
     }
 
     public static ByteString buildByteString(String format, Object... values) {
@@ -179,5 +212,17 @@ public class EtcdUtils {
             return null;
         }
         return value.replace("/", "%2F");
+    }
+
+    /**
+     * Reverses the processing of {@link #escapePathPart(String)}
+     * @param rawValue the part of an etcd key that has been escaped by {@link #escapePathPart(String)}
+     * @return the unescaped value
+     */
+    public static String unescapePathPart(String rawValue) {
+        if (rawValue == null) {
+            return rawValue;
+        }
+        return rawValue.replace("%2F", "/");
     }
 }

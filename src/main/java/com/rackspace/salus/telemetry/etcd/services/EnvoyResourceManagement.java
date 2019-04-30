@@ -146,31 +146,12 @@ public class EnvoyResourceManagement {
         return etcd.getKVClient().get(key)
                 .thenApply(getResponse -> {
                     log.debug("Found {} resources for tenant {} with resourceId {}", getResponse.getKvs().size(), tenantId, resourceId);
+                  if (getResponse.getKvs().isEmpty()) {
+                    return null;
+                  }
+                  else {
                     return parseResourceInfo(getResponse.getKvs()).get(0);
-                });
-    }
-
-    public CompletableFuture<List<ResourceInfo>> getSome(String tenantId, String identifierName) {
-        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_IDENTIFIERS_BY_IDENTIFIER, tenantId, identifierName);
-        return etcd.getKVClient().get(key,
-                GetOption.newBuilder()
-                        .withPrefix(key)
-                        .build())
-                .thenApply(getResponse -> {
-                    log.debug("Found {} resources for tenant {} with identifierName {}", getResponse.getKvs().size(), tenantId, identifierName);
-                    return parseResourceInfo(getResponse.getKvs());
-                });
-    }
-
-    public CompletableFuture<List<ResourceInfo>> getAll(String tenantId) {
-        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_IDENTIFIERS_BY_TENANT, tenantId);
-        return etcd.getKVClient().get(key,
-                GetOption.newBuilder()
-                        .withPrefix(key)
-                        .build())
-                .thenApply(getResponse -> {
-                    log.debug("Found {} resources for tenant {}", getResponse.getKvs().size(), tenantId);
-                    return parseResourceInfo(getResponse.getKvs());
+                  }
                 });
     }
 

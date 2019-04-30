@@ -27,6 +27,7 @@ import com.coreos.jetcd.data.ByteSequence;
 import com.rackspace.salus.telemetry.model.AgentType;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.junit.Test;
 
 public class EtcdUtilsTest {
@@ -146,4 +147,48 @@ public class EtcdUtilsTest {
         assertNull(result);
     }
 
+    @Test
+    public void testUnescapePathPart_null() {
+        final String result = EtcdUtils.unescapePathPart(null);
+
+        assertNull(result);
+    }
+
+    @Test
+    public void testUnescapePathPart_roundTrip() {
+        final String in = EtcdUtils.escapePathPart("public/west");
+        final String result = EtcdUtils.unescapePathPart(in);
+
+        assertEquals("public/west", result);
+    }
+
+    @Test
+    public void testUnescapePathPart_withEscapes() {
+        final String result = EtcdUtils.unescapePathPart("public%2Fwest");
+
+        assertEquals("public/west", result);
+    }
+
+    @Test
+    public void testUnescapePathPart_noEscapes() {
+        final String result = EtcdUtils.unescapePathPart("simple");
+
+        assertEquals("simple", result);
+    }
+
+    @Test
+    public void testPatternFromFormat_fields() {
+        final Pattern result = EtcdUtils
+            .patternFromFormat("/zones/expected/{tenant}/{zoneId}/{resourceId}");
+
+        assertEquals("/zones/expected/(?<tenant>.+?)/(?<zoneId>.+?)/(?<resourceId>.+?)", result.toString());
+    }
+
+    @Test
+    public void testPatternFromFormat_noFields() {
+        final Pattern result = EtcdUtils
+            .patternFromFormat("/zones/expected");
+
+        assertEquals("/zones/expected", result.toString());
+    }
 }

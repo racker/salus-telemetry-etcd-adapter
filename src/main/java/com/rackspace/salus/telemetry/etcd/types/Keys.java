@@ -18,9 +18,13 @@
 
 package com.rackspace.salus.telemetry.etcd.types;
 
+import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import java.util.regex.Pattern;
 
 public class Keys {
+
+    public static final String DELIMITER = "/";
+
     public static final String FMT_ENVOYS_BY_ID = "/tenants/{tenant}/envoysById/{envoyInstanceId}";
     public static final String FMT_AGENT_INSTALLS = "/agentInstalls/{tenant}/{envoyInstanceId}/{agentType}";
     public static final Pattern PTN_AGENT_INSTALLS = Pattern.compile("/agentInstalls/(.+?)/(.+?)/(.+?)");
@@ -49,4 +53,7 @@ public class Keys {
      * Value is latest attached envoy ID
      */
     public static final String FMT_ZONE_EXPECTED = "/zones/expected/{tenant}/{zoneId}/{resourceId}";
+    public static final Pattern PTN_ZONE_EXPECTED = EtcdUtils.patternFromFormat(FMT_ZONE_EXPECTED);
+
+    public static final String PREFIX_ZONE_EXPECTED = "/zones/expected";
 }
