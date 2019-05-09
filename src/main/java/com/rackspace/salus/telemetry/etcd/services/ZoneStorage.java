@@ -102,8 +102,12 @@ public class ZoneStorage {
     return incrementBoundCount(zone, envoyId, 1);
   }
 
+  public CompletableFuture<Integer> decrementBoundCount(ResolvedZone zone, String envoyId) {
+    return incrementBoundCount(zone, envoyId, -1);
+  }
+
   public CompletableFuture<Integer> incrementBoundCount(ResolvedZone zone, String envoyId,
-                                                        int size) {
+                                                        int amount) {
     log.debug("Incrementing bound count of envoy={} in zone={}", envoyId, zone);
 
     final ByteSequence key = buildKey(
@@ -119,7 +123,7 @@ public class ZoneStorage {
 
           final KeyValue kvEntry = getResponse.getKvs().get(0);
           final int prevCount = Integer.parseInt(kvEntry.getValue().toStringUtf8(), 10);
-          final int newCount = prevCount + size;
+          final int newCount = constrainNewCount(prevCount + amount, zone, envoyId);
 
           log.debug("Putting new bound count={} for envoy={} in zone={}", newCount, envoyId, zone);
 
@@ -151,11 +155,24 @@ public class ZoneStorage {
                       "Re-trying incrementing bound count of envoy={} in zone={} due to collision",
                       envoyId, zone
                   );
-                  return incrementBoundCount(zone, envoyId, size);
+                  return incrementBoundCount(zone, envoyId, amount);
                 }
 
               });
         });
+  }
+
+  private int constrainNewCount(int newCount,
+                                ResolvedZone zone, String envoyId) {
+    if (newCount >= 0) {
+      return newCount;
+    }
+    // avoid negative counts
+    else {
+      // but log them since they shouldn't happen
+      log.warn("Prevented negative bound count for zone={} envoy={}", zone, envoyId);
+      return 0;
+    }
   }
 
   public CompletableFuture<Optional<String>> findLeastLoadedEnvoy(ResolvedZone zone) {

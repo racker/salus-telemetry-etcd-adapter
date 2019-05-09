@@ -145,6 +145,56 @@ public class ZoneStorageTest {
   }
 
   @Test
+  public void testdecrementBoundCount_normal() {
+    final long leaseId = grantLease();
+
+    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
+    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
+
+    zoneStorage.incrementBoundCount(zone, "e-1", 12).join();
+
+    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 12, leaseId);
+
+    zoneStorage.decrementBoundCount(zone, "e-1").join();
+
+    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 11, leaseId);
+  }
+
+  @Test
+  public void testdecrementBoundCount_cappedAtZero() {
+    final long leaseId = grantLease();
+
+    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
+    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
+
+    zoneStorage.incrementBoundCount(zone, "e-1").join();
+
+    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 1, leaseId);
+
+    zoneStorage.decrementBoundCount(zone, "e-1").join();
+
+    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 0, leaseId);
+
+    zoneStorage.decrementBoundCount(zone, "e-1").join();
+
+    // and capped at zero
+    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 0, leaseId);
+  }
+
+  @Test
+  public void testdecrementBoundCount_decrementAfterRegister() {
+    final long leaseId = grantLease();
+
+    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
+    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
+
+    zoneStorage.decrementBoundCount(zone, "e-1").join();
+
+    // and capped at zero
+    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 0, leaseId);
+  }
+
+  @Test
   public void testLeastLoaded_emptyZone() {
     final ResolvedZone zone = createPrivateZone("t-none", "zone-nowhere");
 
