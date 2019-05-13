@@ -63,7 +63,7 @@ public class ResolvedZoneTest {
 
     assertThat(resolvedZone, notNullValue());
     assertThat(resolvedZone.isPublicZone(), equalTo(true));
-    assertThat(resolvedZone.getId(), equalTo("public/west"));
+    assertThat(resolvedZone.getName(), equalTo("public/west"));
     assertThat(resolvedZone.getTenantId(), nullValue());
   }
 
@@ -74,7 +74,7 @@ public class ResolvedZoneTest {
 
     assertThat(resolvedZone, notNullValue());
     assertThat(resolvedZone.isPublicZone(), equalTo(false));
-    assertThat(resolvedZone.getId(), equalTo("custom/division1"));
+    assertThat(resolvedZone.getName(), equalTo("custom/division1"));
     assertThat(resolvedZone.getTenantId(), equalTo("t-1"));
   }
 }

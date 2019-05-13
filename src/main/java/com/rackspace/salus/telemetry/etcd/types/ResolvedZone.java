@@ -34,25 +34,27 @@ public class ResolvedZone {
 
   public static final String PUBLIC = "_PUBLIC_";
 
-  final String id;
+  public static final String PUBLIC_PREFIX = "public/";
+
+  final String name;
   final String tenantId;
 
-  private ResolvedZone(String zoneId) {
+  private ResolvedZone(String zoneName) {
     this.tenantId = null; // indicates public
-    this.id = zoneId;
+    this.name = zoneName;
   }
 
-  private ResolvedZone(String zoneTenantId, String zoneId) {
+  private ResolvedZone(String zoneTenantId, String zoneName) {
     this.tenantId = zoneTenantId;
-    this.id = zoneId;
+    this.name = zoneName;
   }
 
-  public static ResolvedZone createPublicZone(String zoneId) {
-    return new ResolvedZone(zoneId);
+  public static ResolvedZone createPublicZone(String zoneName) {
+    return new ResolvedZone(zoneName);
   }
 
-  public static ResolvedZone createPrivateZone(String zoneTenantId, String zoneId) {
-    return new ResolvedZone(zoneTenantId, zoneId);
+  public static ResolvedZone createPrivateZone(String zoneTenantId, String zoneName) {
+    return new ResolvedZone(zoneTenantId, zoneName);
   }
 
   public boolean isPublicZone() {
@@ -69,17 +71,17 @@ public class ResolvedZone {
   }
 
   public String getZoneIdForKey() {
-    return EtcdUtils.escapePathPart(id);
+    return EtcdUtils.escapePathPart(name);
   }
 
   public static ResolvedZone fromKeyParts(String tenant, String zone) {
 
-    final String correctedZoneId = EtcdUtils.unescapePathPart(zone);
+    final String correctedZoneName = EtcdUtils.unescapePathPart(zone);
     if (!tenant.equals(PUBLIC)) {
-      return createPrivateZone(tenant, correctedZoneId);
+      return createPrivateZone(tenant, correctedZoneName);
     }
     else {
-      return createPublicZone(correctedZoneId);
+      return createPublicZone(correctedZoneName);
     }
   }
 }
