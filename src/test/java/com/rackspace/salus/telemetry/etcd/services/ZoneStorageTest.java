@@ -96,6 +96,20 @@ public class ZoneStorageTest {
   }
 
   @Test
+  public void testGetActiveEnvoyCountForZone() {
+    final long leaseId = grantLease();
+    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
+
+    assertThat(zoneStorage.getActiveEnvoyCountForZone(zone).join(), equalTo(0L));
+
+    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
+    zoneStorage.registerEnvoyInZone(zone, "e-2", "r-2", leaseId).join();
+    zoneStorage.registerEnvoyInZone(zone, "e-3", "r-3", leaseId).join();
+
+    assertThat(zoneStorage.getActiveEnvoyCountForZone(zone).join(), equalTo(3L));
+  }
+
+  @Test
   public void testUpdateBound_and_leastLoaded() {
     // just use one lease for all three
     final long leaseId = grantLease();

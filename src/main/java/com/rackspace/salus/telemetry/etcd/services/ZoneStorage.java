@@ -30,6 +30,7 @@ import com.coreos.jetcd.common.exception.ClosedClientException;
 import com.coreos.jetcd.common.exception.ClosedWatcherException;
 import com.coreos.jetcd.data.ByteSequence;
 import com.coreos.jetcd.data.KeyValue;
+import com.coreos.jetcd.kv.GetResponse;
 import com.coreos.jetcd.op.Cmp;
 import com.coreos.jetcd.op.CmpTarget;
 import com.coreos.jetcd.op.Op;
@@ -202,6 +203,19 @@ public class ZoneStorage {
 
           }
         });
+  }
+
+  public CompletableFuture<Long> getActiveEnvoyCountForZone(ResolvedZone zone) {
+      final ByteSequence prefix =
+              buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneIdForKey(), "");
+
+      return etcd.getKVClient().get(
+              prefix,
+              GetOption.newBuilder()
+                      .withPrefix(prefix)
+                      .withCountOnly(true)
+                      .build()
+      ).thenApply(GetResponse::getCount);
   }
 
   private CompletableFuture<Long> determineWatchSequenceOfExpectedZones() {
