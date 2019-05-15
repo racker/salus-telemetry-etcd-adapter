@@ -17,11 +17,11 @@
 package com.rackspace.salus.telemetry.etcd.services;
 
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
-import static com.rackspace.salus.telemetry.etcd.types.Keys.DELIMITER;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_ACTIVE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPECTED;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.PREFIX_ZONE_EXPECTED;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.PTN_ZONE_EXPECTED;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.TRACKING_KEY_ZONE_EXPECTED;
 
 import com.coreos.jetcd.Client;
 import com.coreos.jetcd.KV;
@@ -149,6 +149,7 @@ public class ZoneStorage {
               .commit()
               .thenCompose(txnResponse -> {
 
+                // the txn is never successful if the above If condition is not satisfied
                 if (txnResponse.isSucceeded()) {
                   return CompletableFuture.completedFuture(newCount);
                 } else {
@@ -218,12 +219,21 @@ public class ZoneStorage {
       ).thenApply(GetResponse::getCount);
   }
 
+  /**
+   * Retrieves the latest written revision version of the expected events key.
+   *
+   * See {@link com.rackspace.salus.telemetry.etcd.types.Keys} for a description of how the tracking
+   * key is used.
+   *
+   * @return A completable future containing the revision version, or 0 if the key is not found.
+   */
   private CompletableFuture<Long> determineWatchSequenceOfExpectedZones() {
-    final ByteSequence trackingKey = ByteSequence.fromString(PREFIX_ZONE_EXPECTED);
+
+    final ByteSequence trackingKey = ByteSequence.fromString(TRACKING_KEY_ZONE_EXPECTED);
 
     return etcd.getKVClient().txn()
         .If(
-            // if the prefix tracking key exists?
+            // if the tracking key exists?
             new Cmp(trackingKey, Cmp.Op.GREATER, CmpTarget.version(0))
         )
         .Then(
@@ -260,9 +270,7 @@ public class ZoneStorage {
     return
         determineWatchSequenceOfExpectedZones()
             .thenApply(watchRevision -> {
-              // We need to append the delimiter to the watch path; otherwise, the range-watch would
-              // have picked up our own touches to the tracking key.
-              final String watchPrefixStr = PREFIX_ZONE_EXPECTED + DELIMITER;
+              final String watchPrefixStr = PREFIX_ZONE_EXPECTED;
 
               log.debug("Watching {} from revision {}", watchPrefixStr, watchRevision);
 
@@ -290,7 +298,7 @@ public class ZoneStorage {
 
   private void processZoneExpectedWatcher(Watcher zoneExpectedWatcher,
                                           ZoneStorageListener listener) {
-    final ByteSequence trackingKey = ByteSequence.fromString(PREFIX_ZONE_EXPECTED);
+    final ByteSequence trackingKey = ByteSequence.fromString(TRACKING_KEY_ZONE_EXPECTED);
 
     while (running) {
       try {
