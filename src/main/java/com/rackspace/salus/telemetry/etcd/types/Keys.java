@@ -40,8 +40,6 @@ public class Keys {
 
     public static final String FMT_ENVOYS_BY_AGENT = "/tenants/{tenant}/envoysByAgent/{agentType}/{envoyInstanceId}";
     public static final String FMT_IDENTIFIERS = "/tenants/{tenant}/identifiers/{resourceId}";
-    public static final String FMT_IDENTIFIERS_BY_TENANT = "/tenants/{tenant}/identifiers";
-    public static final String FMT_IDENTIFIERS_BY_IDENTIFIER = "/tenants/{tenant}/identifiers/{identifierName}";
     public static final String FMT_RESOURCES_ACTIVE = "/resources/active/{md5OfTenantAndIdentifierValue}";
     public static final String FMT_WORKALLOC_REGISTRY = "/workAllocations/{realm}/registry/{partitionId}";
 
@@ -56,4 +54,16 @@ public class Keys {
     public static final Pattern PTN_ZONE_EXPECTED = EtcdUtils.patternFromFormat(FMT_ZONE_EXPECTED);
 
     public static final String PREFIX_ZONE_EXPECTED = "/zones/expected";
+
+    /**
+     * This key is only used to store the revision version that was last read by {@link com.rackspace.salus.telemetry.etcd.services.ZoneStorage}.
+     * The revision relates to the watch events seen with the PTN_ZONE_EXPECTED key prefix.
+     *
+     * If the watcher restarts it can start listening from the latest watch event
+     * processed in PTN_ZONE_EXPECTED vs. reading from the start and processing irrelevant events.
+     *
+     * Currently only one process is reading/writing these keys so we will not have a case where
+     * it has to read through a backlog of events after starting up.
+     */
+    public static final String TRACKING_KEY_ZONE_EXPECTED = "/tracking/zones/expected";
 }
