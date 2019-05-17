@@ -248,7 +248,7 @@ public class ZoneStorageTest {
     assertThat(r2resp.getCount(), equalTo(1L));
 
     final GetResponse trackingResp = client.getKVClient().get(
-        ByteSequence.fromString("/zones/expected")
+        ByteSequence.fromString("/tracking/zones/expected")
     ).get();
     assertThat(trackingResp.getCount(), equalTo(1L));
     // ...and the relative revisions of the tracking key vs the registration while not watching
