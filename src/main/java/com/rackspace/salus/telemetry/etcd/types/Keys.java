@@ -46,14 +46,20 @@ public class Keys {
     /**
      * Value is count of bound monitors, leading zero padded to 10 digits
      */
-    public static final String FMT_ZONE_ACTIVE = "/zones/active/{tenant}/{zoneId}/{pollerEnvoyId}";
+    public static final String FMT_ZONE_ACTIVE = "/zones/active/{tenant}/{zoneId}/{resourceId}";
+    public static final Pattern PTN_ZONE_ACTIVE = EtcdUtils.patternFromFormat(FMT_ZONE_ACTIVE);
     /**
      * Value is latest attached envoy ID
      */
     public static final String FMT_ZONE_EXPECTED = "/zones/expected/{tenant}/{zoneId}/{resourceId}";
     public static final Pattern PTN_ZONE_EXPECTED = EtcdUtils.patternFromFormat(FMT_ZONE_EXPECTED);
 
+    public static final String FMT_ZONE_EXPIRING = "/zones/expiring/{tenant}/{zoneId}/{resourceId}";
+    public static final Pattern PTN_ZONE_EXPIRING = EtcdUtils.patternFromFormat(FMT_ZONE_EXPIRING);
+
     public static final String PREFIX_ZONE_EXPECTED = "/zones/expected";
+    public static final String PREFIX_ZONE_ACTIVE = "/zones/active";
+    public static final String PREFIX_ZONE_EXPIRING = "/zones/expiring";
 
     /**
      * This key is only used to store the revision version that was last read by {@link com.rackspace.salus.telemetry.etcd.services.ZoneStorage}.
@@ -66,4 +72,6 @@ public class Keys {
      * it has to read through a backlog of events after starting up.
      */
     public static final String TRACKING_KEY_ZONE_EXPECTED = "/tracking/zones/expected";
+    public static final String TRACKING_KEY_ZONE_ACTIVE = "/tracking/zones/active";
+    public static final String TRACKING_KEY_ZONE_EXPIRING = "/tracking/zones/expiring";
 }

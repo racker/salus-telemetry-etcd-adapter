@@ -44,13 +44,17 @@ public class EnvoyLeaseTracking {
         this.etcdProperties = etcdProperties;
     }
 
+  public CompletableFuture<Long> grant(String leaseName, long timeoutInSecs) {
+    return etcd.getLeaseClient().grant(timeoutInSecs)
+      .thenApply(leaseGrantResponse -> {
+        final long leaseId = leaseGrantResponse.getID();
+        envoyLeases.put(leaseName, leaseId);
+        return leaseId;
+      });
+  }
+
     public CompletableFuture<Long> grant(String envoyInstanceId) {
-        return etcd.getLeaseClient().grant(etcdProperties.getEnvoyLeaseSec())
-                .thenApply(leaseGrantResponse -> {
-                    final long leaseId = leaseGrantResponse.getID();
-                    envoyLeases.put(envoyInstanceId, leaseId);
-                    return leaseId;
-                });
+        return grant(envoyInstanceId, etcdProperties.getEnvoyLeaseSec());
     }
 
     public boolean keepAlive(String envoyInstanceId) {

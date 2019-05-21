@@ -21,9 +21,15 @@ import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
 
 public interface ZoneStorageListener {
 
-  void handleNewEnvoyResourceInZone(ResolvedZone resolvedZone);
+  void handleNewEnvoyResourceInZone(ResolvedZone resolvedZone, String resourceId);
 
   void handleExpectedZoneWatcherClosed(EtcdException e);
 
-  void handleEnvoyResourceReassignedInZone(ResolvedZone resolvedZone, String prevEnvoyId, String newEnvoyId);
+  void handleEnvoyResourceReassignedInZone(ResolvedZone resolvedZone, String resourceId, String prevEnvoyId, String newEnvoyId);
+
+  void handleActiveEnvoyConnection(ResolvedZone resolvedZone, String pollerId);
+
+  void handleActiveEnvoyDisconnection(ResolvedZone resolvedZone, String resourceId, String envoyId);
+
+  void handleExpiredEnvoy(ResolvedZone resolvedZone, String resourceId, String envoyId);
 }

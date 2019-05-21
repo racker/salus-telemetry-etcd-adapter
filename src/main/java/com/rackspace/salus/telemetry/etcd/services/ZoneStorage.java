@@ -19,35 +19,42 @@ package com.rackspace.salus.telemetry.etcd.services;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_ACTIVE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPECTED;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.PREFIX_ZONE_ACTIVE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.PREFIX_ZONE_EXPECTED;
-import static com.rackspace.salus.telemetry.etcd.types.Keys.PTN_ZONE_EXPECTED;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.PREFIX_ZONE_EXPIRING;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.TRACKING_KEY_ZONE_ACTIVE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.TRACKING_KEY_ZONE_EXPECTED;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.TRACKING_KEY_ZONE_EXPIRING;
 
 import com.coreos.jetcd.Client;
 import com.coreos.jetcd.KV;
 import com.coreos.jetcd.Watch.Watcher;
-import com.coreos.jetcd.common.exception.ClosedClientException;
-import com.coreos.jetcd.common.exception.ClosedWatcherException;
 import com.coreos.jetcd.data.ByteSequence;
 import com.coreos.jetcd.data.KeyValue;
+import com.coreos.jetcd.kv.DeleteResponse;
 import com.coreos.jetcd.kv.GetResponse;
+import com.coreos.jetcd.kv.PutResponse;
+import com.coreos.jetcd.lease.LeaseTimeToLiveResponse;
 import com.coreos.jetcd.op.Cmp;
 import com.coreos.jetcd.op.CmpTarget;
 import com.coreos.jetcd.op.Op;
 import com.coreos.jetcd.options.GetOption;
 import com.coreos.jetcd.options.GetOption.SortOrder;
 import com.coreos.jetcd.options.GetOption.SortTarget;
+import com.coreos.jetcd.options.LeaseOption;
 import com.coreos.jetcd.options.PutOption;
 import com.coreos.jetcd.options.WatchOption;
 import com.coreos.jetcd.options.WatchOption.Builder;
 import com.coreos.jetcd.watch.WatchEvent;
-import com.coreos.jetcd.watch.WatchEvent.EventType;
-import com.coreos.jetcd.watch.WatchResponse;
+import com.rackspace.salus.telemetry.etcd.handler.ActiveZoneEventProcessor;
+import com.rackspace.salus.telemetry.etcd.handler.ExpectedZoneEventProcessor;
+import com.rackspace.salus.telemetry.etcd.handler.ExpiringZoneEventProcessor;
 import com.rackspace.salus.telemetry.etcd.types.EtcdStorageException;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
+import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.regex.Matcher;
 import javax.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,11 +73,14 @@ public class ZoneStorage {
   private static final String FMT_BOUND_COUNT = "%010d";
 
   private final Client etcd;
+  private EnvoyLeaseTracking envoyLeaseTracking;
   private boolean running = true;
 
   @Autowired
-  public ZoneStorage(Client etcd) {
+  public ZoneStorage(Client etcd,
+      EnvoyLeaseTracking envoyLeaseTracking) {
     this.etcd = etcd;
+    this.envoyLeaseTracking = envoyLeaseTracking;
   }
 
   @SuppressWarnings("UnstableApiUsage")
@@ -85,7 +95,7 @@ public class ZoneStorage {
 
     return CompletableFuture.allOf(
         kv.put(
-            buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneIdForKey(), envoyId),
+            buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId),
             ByteSequence.fromString(String.format(FMT_BOUND_COUNT, 0)),
             PutOption.newBuilder()
                 .withLeaseId(envoyLeaseId)
@@ -99,20 +109,20 @@ public class ZoneStorage {
     );
   }
 
-  public CompletableFuture<Integer> incrementBoundCount(ResolvedZone zone, String envoyId) {
-    return incrementBoundCount(zone, envoyId, 1);
+  public CompletableFuture<Integer> incrementBoundCount(ResolvedZone zone, String resourceId) {
+    return incrementBoundCount(zone, resourceId, 1);
   }
 
-  public CompletableFuture<Integer> decrementBoundCount(ResolvedZone zone, String envoyId) {
-    return incrementBoundCount(zone, envoyId, -1);
+  public CompletableFuture<Integer> decrementBoundCount(ResolvedZone zone, String resourceId) {
+    return incrementBoundCount(zone, resourceId, -1);
   }
 
-  public CompletableFuture<Integer> incrementBoundCount(ResolvedZone zone, String envoyId,
+  public CompletableFuture<Integer> incrementBoundCount(ResolvedZone zone, String resourceId,
                                                         int amount) {
-    log.debug("Incrementing bound count of envoy={} in zone={}", envoyId, zone);
+    log.debug("Incrementing bound count of resource={} in zone={}", resourceId, zone);
 
     final ByteSequence key = buildKey(
-        FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneIdForKey(), envoyId);
+        FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId);
 
     return etcd.getKVClient().get(key)
         .thenCompose(getResponse -> {
@@ -124,9 +134,9 @@ public class ZoneStorage {
 
           final KeyValue kvEntry = getResponse.getKvs().get(0);
           final int prevCount = Integer.parseInt(kvEntry.getValue().toStringUtf8(), 10);
-          final int newCount = constrainNewCount(prevCount + amount, zone, envoyId);
+          final int newCount = constrainNewCount(prevCount + amount, zone, resourceId);
 
-          log.debug("Putting new bound count={} for envoy={} in zone={}", newCount, envoyId, zone);
+          log.debug("Putting new bound count={} for resource={} in zone={}", newCount, resourceId, zone);
 
           final ByteSequence newValue = ByteSequence.fromString(String.format(
               FMT_BOUND_COUNT,
@@ -154,10 +164,10 @@ public class ZoneStorage {
                   return CompletableFuture.completedFuture(newCount);
                 } else {
                   log.debug(
-                      "Re-trying incrementing bound count of envoy={} in zone={} due to collision",
-                      envoyId, zone
+                      "Re-trying incrementing bound count of resource={} in zone={} due to collision",
+                      resourceId, zone
                   );
-                  return incrementBoundCount(zone, envoyId, amount);
+                  return incrementBoundCount(zone, resourceId, amount);
                 }
 
               });
@@ -165,19 +175,24 @@ public class ZoneStorage {
   }
 
   private int constrainNewCount(int newCount,
-                                ResolvedZone zone, String envoyId) {
+                                ResolvedZone zone, String resourceId) {
     if (newCount >= 0) {
       return newCount;
     }
     // avoid negative counts
     else {
       // but log them since they shouldn't happen
-      log.warn("Prevented negative bound count for zone={} envoy={}", zone, envoyId);
+      log.warn("Prevented negative bound count for zone={} resource={}", zone, resourceId);
       return 0;
     }
   }
 
-  public CompletableFuture<Optional<String>> findLeastLoadedEnvoy(ResolvedZone zone) {
+  /**
+   * Determines which envoy has the least amount of bound monitors assigned to it.
+   * @param zone The resolved zone to search for an envoy.
+   * @return The envoyId/resourceId pair for the envoy that has the least amount of bound monitors.
+   */
+  public CompletableFuture<Optional<EnvoyResourcePair>> findLeastLoadedEnvoy(ResolvedZone zone) {
     log.debug("Finding least loaded envoy in zone={}", zone);
 
     final ByteSequence prefix =
@@ -194,14 +209,27 @@ public class ZoneStorage {
     )
         .thenApply(getResponse -> {
           if (getResponse.getKvs().isEmpty()) {
-            return Optional.empty();
+            return null;
           } else {
             final String envoyKeyInZone = getResponse.getKvs().get(0).getKey().toStringUtf8();
+            return envoyKeyInZone.substring(envoyKeyInZone.lastIndexOf("/") + 1);
+          }
+        })
+        .thenApply(resourceId -> {
+          if (resourceId == null) {
+            return Optional.empty();
+          } else {
 
-            return Optional.of(
-                envoyKeyInZone.substring(envoyKeyInZone.lastIndexOf("/") + 1)
-            );
+            Optional<String> envoyId = getEnvoyIdForResource(zone, resourceId).join();
+            if (!envoyId.isPresent()) {
+              return Optional.empty();
+            } else {
+              EnvoyResourcePair pair = new EnvoyResourcePair()
+                  .setEnvoyId(envoyId.get())
+                  .setResourceId(resourceId);
 
+              return Optional.of(pair);
+            }
           }
         });
   }
@@ -220,16 +248,16 @@ public class ZoneStorage {
   }
 
   /**
-   * Retrieves the latest written revision version of the expected events key.
+   * Retrieves the latest written revision version of the events key.
    *
    * See {@link com.rackspace.salus.telemetry.etcd.types.Keys} for a description of how the tracking
    * key is used.
    *
    * @return A completable future containing the revision version, or 0 if the key is not found.
    */
-  private CompletableFuture<Long> determineWatchSequenceOfExpectedZones() {
+  private CompletableFuture<Long> getRevisionVersionOfKey(String key) {
 
-    final ByteSequence trackingKey = ByteSequence.fromString(TRACKING_KEY_ZONE_EXPECTED);
+    final ByteSequence trackingKey = ByteSequence.fromString(key);
 
     return etcd.getKVClient().txn()
         .If(
@@ -264,14 +292,24 @@ public class ZoneStorage {
    * {@link Watcher} is provided only for testing/informational purposes.
    */
   public CompletableFuture<Watcher> watchExpectedZones(ZoneStorageListener listener) {
+    return watchZones(TRACKING_KEY_ZONE_EXPECTED, PREFIX_ZONE_EXPECTED, listener);
+  }
+
+  public CompletableFuture<Watcher> watchActiveZones(ZoneStorageListener listener) {
+    return watchZones(TRACKING_KEY_ZONE_ACTIVE, PREFIX_ZONE_ACTIVE, listener);
+  }
+
+  public CompletableFuture<Watcher> watchExpiringZones(ZoneStorageListener listener) {
+    return watchZones(TRACKING_KEY_ZONE_EXPIRING, PREFIX_ZONE_EXPIRING, listener);
+  }
+
+  public CompletableFuture<Watcher> watchZones(String trackingKey, String watchPrefixStr, ZoneStorageListener listener) {
     Assert.notNull(listener, "A ZoneStorageListener is required");
 
     // first we need to see if a previous app was watching the zones
     return
-        determineWatchSequenceOfExpectedZones()
+        getRevisionVersionOfKey(trackingKey)
             .thenApply(watchRevision -> {
-              final String watchPrefixStr = PREFIX_ZONE_EXPECTED;
-
               log.debug("Watching {} from revision {}", watchPrefixStr, watchRevision);
 
               final ByteSequence watchPrefix = ByteSequence
@@ -282,83 +320,89 @@ public class ZoneStorage {
                   .withPrevKV(true)
                   .withRevision(watchRevision);
 
-              final Watcher zoneExpectedWatcher = etcd.getWatchClient().watch(
+              final Watcher zoneWatcher = etcd.getWatchClient().watch(
                   watchPrefix,
                   watchOptionBuilder.build()
               );
 
-              new Thread(() -> {
-                processZoneExpectedWatcher(zoneExpectedWatcher, listener);
-              }, "zoneExpectedWatcher")
-                  .start();
+              switch (trackingKey) {
+                case TRACKING_KEY_ZONE_EXPECTED:
+                  new Thread(
+                      new ExpectedZoneEventProcessor(zoneWatcher, listener, this),
+                      "expectedZoneWatcher")
+                      .start();
+                  break;
+                case TRACKING_KEY_ZONE_ACTIVE:
+                  new Thread(
+                      new ActiveZoneEventProcessor(zoneWatcher, listener, this),
+                      "activeZoneWatcher")
+                      .start();
+                  break;
+                case TRACKING_KEY_ZONE_EXPIRING:
+                  new Thread(
+                      new ExpiringZoneEventProcessor(zoneWatcher, listener, this),
+                      "expiringZoneWatcher")
+                      .start();
+                  break;
+                default:
+                  log.error("Attempting to process unknown tracking key: {}", trackingKey);
+                  break;
+              }
 
-              return zoneExpectedWatcher;
+              return zoneWatcher;
             });
   }
 
-  private void processZoneExpectedWatcher(Watcher zoneExpectedWatcher,
-                                          ZoneStorageListener listener) {
-    final ByteSequence trackingKey = ByteSequence.fromString(TRACKING_KEY_ZONE_EXPECTED);
+  public CompletableFuture<PutResponse> createExpiringEntry(ResolvedZone zone, String resourceId, String envoyId, long pollerTimeout) {
+    log.debug("Creating expired entry for zone={} with timeout={}", zone, pollerTimeout);
+    String leaseName = String.format("expiring-%s:%s", zone.getTenantId(), resourceId);
+    return envoyLeaseTracking.grant(leaseName, pollerTimeout)
+        .thenCompose(leaseId ->
+            etcd.getKVClient().put(
+              buildKey(FMT_ZONE_EXPIRING, zone.getTenantForKey(), zone.getZoneIdForKey(),
+                  resourceId),
+              ByteSequence.fromString(envoyId),
+              PutOption.newBuilder()
+                  .withLeaseId(leaseId)
+                  .build()));
+  }
 
-    while (running) {
-      try {
-        final WatchResponse response = zoneExpectedWatcher.listen();
+  public CompletableFuture<DeleteResponse> removeExpiringEntry(ResolvedZone zone, String resourceId) {
+    return etcd.getKVClient().delete(
+        buildKey(FMT_ZONE_EXPIRING, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId));
+  }
 
-        try {
-          for (WatchEvent event : response.getEvents()) {
+  public CompletableFuture<DeleteResponse> removeExpectedEntry(ResolvedZone zone, String resourceId) {
+    return etcd.getKVClient().delete(
+        buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId));
+  }
 
-            final EventType eventType = event.getEventType();
-
-            if (eventType == EventType.PUT) {
-
-              final String keyStr = event.getKeyValue().getKey().toStringUtf8();
-              final Matcher matcher = PTN_ZONE_EXPECTED.matcher(keyStr);
-
-              if (matcher.matches()) {
-                final ResolvedZone resolvedZone = ResolvedZone.fromKeyParts(
-                    matcher.group("tenant"),
-                    matcher.group("zoneId")
-                );
-
-                // prev KV is always populated by event, but a version=0 means it wasn't present in storage
-                if (event.getPrevKV().getVersion() == 0) {
-                  try {
-                    listener.handleNewEnvoyResourceInZone(resolvedZone);
-                  } catch (Exception e) {
-                    log.warn("Unexpected failure within listener={}", listener, e);
-                  }
-                } else {
-                  try {
-                    listener.handleEnvoyResourceReassignedInZone(
-                        resolvedZone,
-                        event.getPrevKV().getValue().toStringUtf8(),
-                        event.getKeyValue().getValue().toStringUtf8()
-                    );
-                  } catch (Exception e) {
-                    log.warn("Unexpected failure within listener={}", listener, e);
-                  }
-                }
-              } else {
-                log.warn("Unable to parse key={}", keyStr);
-              }
-
-            }
-          }
-        } finally {
-          etcd.getKVClient().put(trackingKey, ByteSequence.fromString(""));
-        }
-
-      } catch (InterruptedException e) {
-        log.warn("Interrupted while watching zone expected", e);
-      } catch (ClosedWatcherException | ClosedClientException e) {
-        log.debug("Stopping processing due to closure", e);
-        listener.handleExpectedZoneWatcherClosed(e);
-        return;
+  public CompletableFuture<Optional<String>> getEnvoyIdForResource(ResolvedZone zone, String resourceId) {
+    return etcd.getKVClient().get(
+        buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId)
+    ).thenApply(getResponse -> {
+      if (getResponse.getCount() > 0) {
+        return Optional.of(getResponse.getKvs().get(0).getValue().toStringUtf8());
+      } else {
+        return Optional.empty();
       }
-    }
+    });
+  }
 
-    listener.handleExpectedZoneWatcherClosed(null);
+  public boolean isLeaseExpired(WatchEvent event) {
+    log.debug("Checking for expired lease. type={} value={}", event.getEventType(), event.getPrevKV().getValue().toStringUtf8());
+    long leaseId = event.getPrevKV().getLease();
+    long remainingTtl = etcd.getLeaseClient().timeToLive(leaseId, LeaseOption.DEFAULT)
+        .thenApply(LeaseTimeToLiveResponse::getTTl).join();
+    return remainingTtl <= 0;
+  }
 
+  public void updateTrackingKey(ByteSequence key) {
+    etcd.getKVClient().put(key, ByteSequence.fromString(""));
+  }
+
+  public boolean isRunning() {
+    return running;
   }
 
   @PreDestroy
