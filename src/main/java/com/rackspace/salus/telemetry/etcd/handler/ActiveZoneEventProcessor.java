@@ -64,13 +64,14 @@ public class ActiveZoneEventProcessor implements Runnable {
             final Matcher matcher = PTN_ZONE_ACTIVE.matcher(keyStr);
 
             if (!matcher.matches()) {
+              log.warn("Unable to parse active event key={}", keyStr);
               continue;
             }
 
             String resourceId = matcher.group("resourceId");
             final ResolvedZone resolvedZone = ResolvedZone.fromKeyParts(
                 matcher.group("tenant"),
-                matcher.group("zoneId")
+                matcher.group("zoneName")
             );
 
             switch (event.getEventType()) {

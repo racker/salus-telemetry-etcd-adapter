@@ -70,7 +70,7 @@ public class ResolvedZone {
     }
   }
 
-  public String getZoneIdForKey() {
+  public String getZoneNameForKey() {
     return EtcdUtils.escapePathPart(name);
   }
 

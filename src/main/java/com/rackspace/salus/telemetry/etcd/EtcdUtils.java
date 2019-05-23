@@ -87,11 +87,11 @@ public class EtcdUtils {
      * <p>
      *   For example, given the format string
      *   <pre>
-     *     /zones/expected/{tenant}/{zoneId}/{resourceId}
+     *     /zones/expected/{tenant}/{zoneName}/{resourceId}
      *   </pre>
      *   then this method will produce a regex pattern:
      *   <pre>
-     *     /zones/expected/(?&lt;tenant&gt;.+?)/(?&lt;zoneId&gt;.+?)/(?&lt;resourceId&gt;.+?)
+     *     /zones/expected/(?&lt;tenant&gt;.+?)/(?&lt;zoneName&gt;.+?)/(?&lt;resourceId&gt;.+?)
      *   </pre>
      * </p>
      * @param format a <code>{...}</code> format string

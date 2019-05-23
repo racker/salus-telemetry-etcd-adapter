@@ -46,15 +46,15 @@ public class Keys {
     /**
      * Value is count of bound monitors, leading zero padded to 10 digits
      */
-    public static final String FMT_ZONE_ACTIVE = "/zones/active/{tenant}/{zoneId}/{resourceId}";
+    public static final String FMT_ZONE_ACTIVE = "/zones/active/{tenant}/{zoneName}/{resourceId}";
     public static final Pattern PTN_ZONE_ACTIVE = EtcdUtils.patternFromFormat(FMT_ZONE_ACTIVE);
     /**
      * Value is latest attached envoy ID
      */
-    public static final String FMT_ZONE_EXPECTED = "/zones/expected/{tenant}/{zoneId}/{resourceId}";
+    public static final String FMT_ZONE_EXPECTED = "/zones/expected/{tenant}/{zoneName}/{resourceId}";
     public static final Pattern PTN_ZONE_EXPECTED = EtcdUtils.patternFromFormat(FMT_ZONE_EXPECTED);
 
-    public static final String FMT_ZONE_EXPIRING = "/zones/expiring/{tenant}/{zoneId}/{resourceId}";
+    public static final String FMT_ZONE_EXPIRING = "/zones/expiring/{tenant}/{zoneName}/{resourceId}";
     public static final Pattern PTN_ZONE_EXPIRING = EtcdUtils.patternFromFormat(FMT_ZONE_EXPIRING);
 
     public static final String PREFIX_ZONE_EXPECTED = "/zones/expected";

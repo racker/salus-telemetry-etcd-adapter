@@ -95,14 +95,14 @@ public class ZoneStorage {
 
     return CompletableFuture.allOf(
         kv.put(
-            buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId),
+            buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId),
             ByteSequence.fromString(String.format(FMT_BOUND_COUNT, 0)),
             PutOption.newBuilder()
                 .withLeaseId(envoyLeaseId)
                 .build()
         ),
         kv.put(
-            buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId),
+            buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId),
             ByteSequence.fromString(envoyId),
             PutOption.DEFAULT
         )
@@ -122,7 +122,7 @@ public class ZoneStorage {
     log.debug("Incrementing bound count of resource={} in zone={}", resourceId, zone);
 
     final ByteSequence key = buildKey(
-        FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId);
+        FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId);
 
     return etcd.getKVClient().get(key)
         .thenCompose(getResponse -> {
@@ -196,7 +196,7 @@ public class ZoneStorage {
     log.debug("Finding least loaded envoy in zone={}", zone);
 
     final ByteSequence prefix =
-        buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneIdForKey(), "");
+        buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
 
     return etcd.getKVClient().get(
         prefix,
@@ -236,7 +236,7 @@ public class ZoneStorage {
 
   public CompletableFuture<Long> getActiveEnvoyCountForZone(ResolvedZone zone) {
       final ByteSequence prefix =
-              buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneIdForKey(), "");
+              buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
 
       return etcd.getKVClient().get(
               prefix,
@@ -359,7 +359,7 @@ public class ZoneStorage {
     return envoyLeaseTracking.grant(leaseName, pollerTimeout)
         .thenCompose(leaseId ->
             etcd.getKVClient().put(
-              buildKey(FMT_ZONE_EXPIRING, zone.getTenantForKey(), zone.getZoneIdForKey(),
+              buildKey(FMT_ZONE_EXPIRING, zone.getTenantForKey(), zone.getZoneNameForKey(),
                   resourceId),
               ByteSequence.fromString(envoyId),
               PutOption.newBuilder()
@@ -369,17 +369,17 @@ public class ZoneStorage {
 
   public CompletableFuture<DeleteResponse> removeExpiringEntry(ResolvedZone zone, String resourceId) {
     return etcd.getKVClient().delete(
-        buildKey(FMT_ZONE_EXPIRING, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId));
+        buildKey(FMT_ZONE_EXPIRING, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId));
   }
 
   public CompletableFuture<DeleteResponse> removeExpectedEntry(ResolvedZone zone, String resourceId) {
     return etcd.getKVClient().delete(
-        buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId));
+        buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId));
   }
 
   public CompletableFuture<Optional<String>> getEnvoyIdForResource(ResolvedZone zone, String resourceId) {
     return etcd.getKVClient().get(
-        buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneIdForKey(), resourceId)
+        buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId)
     ).thenApply(getResponse -> {
       if (getResponse.getCount() > 0) {
         return Optional.of(getResponse.getKvs().get(0).getValue().toStringUtf8());

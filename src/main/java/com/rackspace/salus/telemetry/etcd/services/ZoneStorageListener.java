@@ -27,9 +27,10 @@ public interface ZoneStorageListener {
 
   void handleEnvoyResourceReassignedInZone(ResolvedZone resolvedZone, String resourceId, String prevEnvoyId, String newEnvoyId);
 
-  void handleActiveEnvoyConnection(ResolvedZone resolvedZone, String pollerId);
+  void handleActiveEnvoyConnection(ResolvedZone resolvedZone, String envoyId);
 
   void handleActiveEnvoyDisconnection(ResolvedZone resolvedZone, String resourceId, String envoyId);
 
   void handleExpiredEnvoy(ResolvedZone resolvedZone, String resourceId, String envoyId);
+
 }

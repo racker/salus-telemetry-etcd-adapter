@@ -71,12 +71,13 @@ public class ExpectedZoneEventProcessor implements Runnable {
                 final Matcher matcher = PTN_ZONE_EXPECTED.matcher(keyStr);
 
                 if (!matcher.matches()) {
+                  log.warn("Unable to parse expected event key={}", keyStr);
                   continue;
                 }
                 String resourceId = matcher.group("resourceId");
                 final ResolvedZone resolvedZone = ResolvedZone.fromKeyParts(
                     matcher.group("tenant"),
-                    matcher.group("zoneId")
+                    matcher.group("zoneName")
                 );
 
                 // prev KV is always populated by event, but a version=0 means it wasn't present in storage
