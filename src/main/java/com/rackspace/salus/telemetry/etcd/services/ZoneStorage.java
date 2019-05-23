@@ -248,14 +248,14 @@ public class ZoneStorage {
   }
 
   /**
-   * Retrieves the latest written revision version of the events key.
+   * Retrieves the latest written revision of the events key.
    *
    * See {@link com.rackspace.salus.telemetry.etcd.types.Keys} for a description of how the tracking
    * key is used.
    *
-   * @return A completable future containing the revision version, or 0 if the key is not found.
+   * @return A completable future containing the revision, or 0 if the key is not found.
    */
-  private CompletableFuture<Long> getRevisionVersionOfKey(String key) {
+  private CompletableFuture<Long> getRevisionOfKey(String key) {
 
     final ByteSequence trackingKey = ByteSequence.fromString(key);
 
@@ -308,7 +308,7 @@ public class ZoneStorage {
 
     // first we need to see if a previous app was watching the zones
     return
-        getRevisionVersionOfKey(trackingKey)
+        getRevisionOfKey(trackingKey)
             .thenApply(watchRevision -> {
               log.debug("Watching {} from revision {}", watchPrefixStr, watchRevision);
 
@@ -389,6 +389,11 @@ public class ZoneStorage {
     });
   }
 
+  /**
+   * Determines whether the lease of key within a watch event is still active or not.
+   * @param event The watch event to inspect.
+   * @return True if the lease is no longer active, otherwise false.
+   */
   public boolean isLeaseExpired(WatchEvent event) {
     log.debug("Checking for expired lease. type={} value={}", event.getEventType(), event.getPrevKV().getValue().toStringUtf8());
     long leaseId = event.getPrevKV().getLease();
@@ -397,7 +402,12 @@ public class ZoneStorage {
     return remainingTtl <= 0;
   }
 
-  public void updateTrackingKey(ByteSequence key) {
+  /**
+   * Touches the key to bump the version number associated to it.
+   * This is only used for tracking keys, since we only input an empty string.
+   * @param key The tracking key to act on.
+   */
+  public void incrementTrackingKeyVersion(ByteSequence key) {
     etcd.getKVClient().put(key, ByteSequence.fromString(""));
   }
 

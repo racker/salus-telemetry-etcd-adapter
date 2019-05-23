@@ -50,10 +50,10 @@ public class ResolvedZoneTest {
   }
 
   @Test
-  public void getZoneIdForKey() {
+  public void getZoneNameForKey() {
     final ResolvedZone zone = createPublicZone("companyName/west");
 
-    assertThat(zone.getZoneIdForKey(), equalTo("companyName%2Fwest"));
+    assertThat(zone.getZoneNameForKey(), equalTo("companyName%2Fwest"));
   }
 
   @Test
