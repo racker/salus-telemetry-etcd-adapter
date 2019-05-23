@@ -244,7 +244,6 @@ public class ZoneStorageTest {
   @Test
   public void testIsLeaseExpired_revoked() throws Exception {
     long leaseId = grantLease();
-
     com.coreos.jetcd.api.KeyValue kv = com.coreos.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
     com.coreos.jetcd.data.KeyValue kv1 = new com.coreos.jetcd.data.KeyValue(kv);
 
