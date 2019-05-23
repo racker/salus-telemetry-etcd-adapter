@@ -19,32 +19,43 @@ package com.rackspace.salus.telemetry.etcd.services;
 import static com.rackspace.salus.telemetry.etcd.types.ResolvedZone.createPrivateZone;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.lessThan;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
-import static org.mockito.ArgumentMatchers.notNull;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 import com.coreos.jetcd.Client;
-import com.coreos.jetcd.Watch.Watcher;
 import com.coreos.jetcd.data.ByteSequence;
 import com.coreos.jetcd.kv.GetResponse;
+import com.coreos.jetcd.kv.PutResponse;
 import com.coreos.jetcd.lease.LeaseGrantResponse;
+import com.coreos.jetcd.options.LeaseOption;
+import com.coreos.jetcd.watch.WatchEvent;
+import com.coreos.jetcd.watch.WatchEvent.EventType;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
+import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
 import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import java.net.URI;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
-import org.mockito.Mockito;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.testcontainers.shaded.org.apache.commons.lang.RandomStringUtils;
 
+@RunWith(MockitoJUnitRunner.class)
 public class ZoneStorageTest {
   @Rule
   public final EtcdClusterResource etcd = new EtcdClusterResource("ZoneStorageTest", 1);
@@ -56,6 +67,9 @@ public class ZoneStorageTest {
 
   private ZoneStorage zoneStorage;
 
+  @Mock
+  private EnvoyLeaseTracking envoyLeaseTracking;
+
   @Before
   public void setUp() {
     final List<String> endpoints = etcd.cluster().getClientEndpoints().stream()
@@ -63,7 +77,7 @@ public class ZoneStorageTest {
         .collect(Collectors.toList());
     client = com.coreos.jetcd.Client.builder().endpoints(endpoints).build();
 
-    zoneStorage = new ZoneStorage(client);
+    zoneStorage = new ZoneStorage(client, envoyLeaseTracking);
   }
 
   @After
@@ -81,7 +95,7 @@ public class ZoneStorageTest {
     zoneStorage.registerEnvoyInZone(zone, "123-456", "r-1", leaseId).join();
 
     final GetResponse activeResponse = client.getKVClient()
-        .get(ByteSequence.fromString("/zones/active/t-1/zone-1/123-456"))
+        .get(ByteSequence.fromString("/zones/active/t-1/zone-1/r-1"))
         .join();
     assertThat(activeResponse.getKvs(), hasSize(1));
     assertThat(activeResponse.getKvs().get(0).getLease(), equalTo(leaseId));
@@ -98,7 +112,7 @@ public class ZoneStorageTest {
   @Test
   public void testGetActiveEnvoyCountForZone() {
     final long leaseId = grantLease();
-    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
+    final ResolvedZone zone = createPrivateZone("t-1", "r-1");
 
     assertThat(zoneStorage.getActiveEnvoyCountForZone(zone).join(), equalTo(0L));
 
@@ -121,26 +135,27 @@ public class ZoneStorageTest {
     zoneStorage.registerEnvoyInZone(zone, "e-3", "r-3", leaseId).join();
 
     for (int i = 0; i < 10; ++i) {
-      zoneStorage.incrementBoundCount(zone, "e-1")
+      zoneStorage.incrementBoundCount(zone, "r-1")
       .join();
     }
     for (int i = 0; i < 20; ++i) {
-      zoneStorage.incrementBoundCount(zone, "e-2")
+      zoneStorage.incrementBoundCount(zone, "r-2")
       .join();
     }
     for (int i = 0; i < 5; ++i) {
-      zoneStorage.incrementBoundCount(zone, "e-3")
+      zoneStorage.incrementBoundCount(zone, "r-3")
       .join();
     }
 
-    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 10, leaseId);
-    assertValueAndLease("/zones/active/t-1/zone-1/e-2", 20, leaseId);
-    assertValueAndLease("/zones/active/t-1/zone-1/e-3", 5, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 10, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-2", 20, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-3", 5, leaseId);
 
-    final Optional<String> leastLoaded = zoneStorage.findLeastLoadedEnvoy(zone).join();
+    final Optional<EnvoyResourcePair> leastLoaded = zoneStorage.findLeastLoadedEnvoy(zone).join();
     assertThat(leastLoaded.isPresent(), equalTo(true));
     //noinspection OptionalGetWithoutIsPresent
-    assertThat(leastLoaded.get(), equalTo("e-3"));
+    assertThat(leastLoaded.get().getEnvoyId(), equalTo("e-3"));
+    assertThat(leastLoaded.get().getResourceId(), equalTo("r-3"));
   }
 
   @Test
@@ -151,183 +166,174 @@ public class ZoneStorageTest {
 
     zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
 
-    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 0, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 0, leaseId);
 
-    zoneStorage.incrementBoundCount(zone, "e-1", 12).join();
+    zoneStorage.incrementBoundCount(zone, "r-1", 12).join();
 
-    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 12, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 12, leaseId);
   }
 
   @Test
-  public void testdecrementBoundCount_normal() {
+  public void testDecrementBoundCount_normal() {
     final long leaseId = grantLease();
 
     final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
     zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
 
-    zoneStorage.incrementBoundCount(zone, "e-1", 12).join();
+    zoneStorage.incrementBoundCount(zone, "r-1", 12).join();
 
-    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 12, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 12, leaseId);
 
-    zoneStorage.decrementBoundCount(zone, "e-1").join();
+    zoneStorage.decrementBoundCount(zone, "r-1").join();
 
-    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 11, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 11, leaseId);
   }
 
   @Test
-  public void testdecrementBoundCount_cappedAtZero() {
+  public void testDecrementBoundCount_cappedAtZero() {
     final long leaseId = grantLease();
 
     final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
     zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
 
-    zoneStorage.incrementBoundCount(zone, "e-1").join();
+    zoneStorage.incrementBoundCount(zone, "r-1").join();
 
-    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 1, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 1, leaseId);
 
-    zoneStorage.decrementBoundCount(zone, "e-1").join();
+    zoneStorage.decrementBoundCount(zone, "r-1").join();
 
-    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 0, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 0, leaseId);
 
-    zoneStorage.decrementBoundCount(zone, "e-1").join();
+    zoneStorage.decrementBoundCount(zone, "r-1").join();
 
     // and capped at zero
-    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 0, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 0, leaseId);
   }
 
   @Test
-  public void testdecrementBoundCount_decrementAfterRegister() {
+  public void testDecrementBoundCount_decrementAfterRegister() {
     final long leaseId = grantLease();
 
     final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
     zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
 
-    zoneStorage.decrementBoundCount(zone, "e-1").join();
+    zoneStorage.decrementBoundCount(zone, "r-1").join();
 
     // and capped at zero
-    assertValueAndLease("/zones/active/t-1/zone-1/e-1", 0, leaseId);
+    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 0, leaseId);
   }
 
   @Test
   public void testLeastLoaded_emptyZone() {
     final ResolvedZone zone = createPrivateZone("t-none", "zone-nowhere");
 
-    final Optional<String> leastLoaded = zoneStorage.findLeastLoadedEnvoy(zone).join();
+    final Optional<EnvoyResourcePair> leastLoaded = zoneStorage.findLeastLoadedEnvoy(zone).join();
     assertThat(leastLoaded.isPresent(), equalTo(false));
   }
 
   @Test
-  public void testNewExpectedEnvoyResource() throws ExecutionException, InterruptedException {
-    registerAndWatchExpected(createPrivateZone("t-1", "z-1"), "r-1", "t-1");
+  public void testIsLeaseExpired_notExpired() {
+    long leaseId = grantLease();
+    com.coreos.jetcd.api.KeyValue kv = com.coreos.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
+    com.coreos.jetcd.data.KeyValue kv1 = new com.coreos.jetcd.data.KeyValue(kv);
+    WatchEvent event = new WatchEvent(null, kv1, EventType.DELETE);
+
+    assertFalse(zoneStorage.isLeaseExpired(event));
   }
 
-  /**
-   * This test simulates the scenario where the zone management application is restarting, but
-   * during the down time a new envoy-resource registered in the zone.
-   */
   @Test
-  public void testResumingExpectedEnvoyWatch() throws ExecutionException, InterruptedException {
-    final String tenant = testName.getMethodName();
+  public void testIsLeaseExpired_revoked() throws Exception {
+    long leaseId = grantLease();
 
-    final ResolvedZone resolvedZone = createPrivateZone(tenant, "z-1");
+    com.coreos.jetcd.api.KeyValue kv = com.coreos.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
+    com.coreos.jetcd.data.KeyValue kv1 = new com.coreos.jetcd.data.KeyValue(kv);
 
-    registerAndWatchExpected(resolvedZone, "r-1", tenant);
+    WatchEvent event = new WatchEvent(null, kv1, EventType.DELETE);
+    revokeLease(leaseId);
+    // This test passes individually without the sleep but needs to wait for the revoke to process
+    // when run as part of the whole suite.
+    Thread.sleep(100);
 
-    // one envoy-resource has registered, now register another prior to re-watching
+    assertTrue(zoneStorage.isLeaseExpired(event));
+  }
 
-    final long leaseId = grantLease();
-    zoneStorage.registerEnvoyInZone(resolvedZone, "e-2", "r-2", leaseId)
+  @Test
+  public void testIsLeaseExpired_expired() throws Exception {
+    long leaseId = grantLease(0);
+    com.coreos.jetcd.api.KeyValue kv = com.coreos.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
+    com.coreos.jetcd.data.KeyValue kv1 = new com.coreos.jetcd.data.KeyValue(kv);
+    WatchEvent event = new WatchEvent(null, kv1, EventType.DELETE);
+
+    // this actually creates a lease of 1s, so we have to wait for it to expire.
+    Thread.sleep(1000);
+
+    assertTrue(zoneStorage.isLeaseExpired(event));
+  }
+
+  @Test
+  public void testCreateExpiringEntry() throws Exception {
+    final ResolvedZone zone = createPrivateZone("t-1", RandomStringUtils.randomAlphabetic(10));
+    final String resourceId = RandomStringUtils.randomAlphabetic(10);
+    final String envoyId = RandomStringUtils.randomAlphabetic(10);
+    final long pollerTimeout = 1000;
+    final long leaseId = grantLease(pollerTimeout);
+
+    when(envoyLeaseTracking.grant(anyString(), anyLong()))
+        .thenReturn(CompletableFuture.completedFuture(leaseId));
+
+    PutResponse response = zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout).get();
+
+    assertFalse(response.hasPrevKv());
+
+    final GetResponse expiringResponse = client.getKVClient()
+        .get(ByteSequence.fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
         .join();
+    assertThat(expiringResponse.getKvs(), hasSize(1));
 
-    // sanity check KV content
-    final GetResponse r2resp = client.getKVClient().get(
-        ByteSequence.fromString(String.format("/zones/expected/%s/z-1/r-2",
-            tenant
-        ))
-    ).get();
-    assertThat(r2resp.getCount(), equalTo(1L));
+    long foundLeaseId = expiringResponse.getKvs().get(0).getLease();
+    assertThat(foundLeaseId, equalTo(leaseId));
 
-    final GetResponse trackingResp = client.getKVClient().get(
-        ByteSequence.fromString("/zones/expected")
-    ).get();
-    assertThat(trackingResp.getCount(), equalTo(1L));
-    // ...and the relative revisions of the tracking key vs the registration while not watching
-    assertThat(trackingResp.getKvs().get(0).getModRevision(), lessThan(r2resp.getKvs().get(0).getModRevision()));
-
-    // Now restart watching, which should pick up from where the other ended
-
-    final ZoneStorageListener listener = Mockito.mock(ZoneStorageListener.class);
-
-    try (Watcher ignored = zoneStorage.watchExpectedZones(listener).get()) {
-
-      verify(listener, timeout(5000)).handleNewEnvoyResourceInZone(resolvedZone);
-
-    } finally {
-      // watcher has been closed
-
-      verify(listener, timeout(5000)).handleExpectedZoneWatcherClosed(notNull());
-
-      verifyNoMoreInteractions(listener);
-    }
-
+    long ttl = client.getLeaseClient().timeToLive(foundLeaseId, LeaseOption.DEFAULT).get().getGrantedTTL();
+    assertThat(ttl, is(pollerTimeout));
   }
 
   @Test
-  public void testWatchExpectedZones_reRegister() throws ExecutionException, InterruptedException {
-    final String tenant = testName.getMethodName();
+  public void testRemoveExpiringEntry() {
+    final ResolvedZone zone = createPrivateZone("t-1", RandomStringUtils.randomAlphabetic(10));
+    final String resourceId = RandomStringUtils.randomAlphabetic(10);
+    final String envoyId = RandomStringUtils.randomAlphabetic(10);
+    final long pollerTimeout = 1000;
+    final long leaseId = grantLease(pollerTimeout);
 
-    final ResolvedZone resolvedZone = createPrivateZone(tenant, "z-1");
+    when(envoyLeaseTracking.grant(anyString(), anyLong()))
+        .thenReturn(CompletableFuture.completedFuture(leaseId));
 
-    final ZoneStorageListener listener = Mockito.mock(ZoneStorageListener.class);
+    zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout);
 
-    try (Watcher ignored = zoneStorage.watchExpectedZones(listener).get()) {
+    GetResponse expiringResponse = client.getKVClient()
+        .get(ByteSequence.fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
+        .join();
+    assertThat(expiringResponse.getKvs(), hasSize(1));
 
-      final long leaseId = grantLease();
+    zoneStorage.removeExpiringEntry(zone, resourceId);
 
-      zoneStorage.registerEnvoyInZone(resolvedZone, "e-1", "r-1", leaseId)
-          .join();
-
-      verify(listener, timeout(5000)).handleNewEnvoyResourceInZone(resolvedZone);
-
-      zoneStorage.registerEnvoyInZone(resolvedZone, "e-2", "r-1", leaseId)
-          .join();
-
-      verify(listener, timeout(5000)).handleEnvoyResourceReassignedInZone(
-          resolvedZone, "e-1", "e-2");
-
-    } finally {
-      // watcher has been closed
-
-      // it is expected that watcher is closed with exception when closed prior to stopping the component
-      verify(listener, timeout(5000)).handleExpectedZoneWatcherClosed(notNull());
-
-      verifyNoMoreInteractions(listener);
-    }
-
+    expiringResponse = client.getKVClient()
+        .get(ByteSequence.fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
+        .join();
+    assertThat(expiringResponse.getKvs(), hasSize(0));
   }
 
-  private void registerAndWatchExpected(ResolvedZone resolvedZone, String resourceId, String tenant)
-      throws InterruptedException, ExecutionException {
-    final ZoneStorageListener listener = Mockito.mock(ZoneStorageListener.class);
+  @Test
+  public void testGetEnvoyIdForResource() {
+    final long leaseId = grantLease();
+    final String envoyId = RandomStringUtils.randomAlphabetic(10);
+    final String resourceId = RandomStringUtils.randomAlphabetic(10);
+    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
+    zoneStorage.registerEnvoyInZone(zone, envoyId, resourceId, leaseId).join();
 
-    try (Watcher ignored = zoneStorage.watchExpectedZones(listener).get()) {
-
-      final long leaseId = grantLease();
-
-      zoneStorage.registerEnvoyInZone(resolvedZone, "e-1", resourceId, leaseId)
-          .join();
-
-      verify(listener, timeout(5000)).handleNewEnvoyResourceInZone(resolvedZone);
-
-
-    } finally {
-      // watcher has been closed
-
-      // it is expected that watcher is closed with exception when closed prior to stopping the component
-      verify(listener, timeout(5000)).handleExpectedZoneWatcherClosed(notNull());
-
-      verifyNoMoreInteractions(listener);
-    }
+    Optional<String> result = zoneStorage.getEnvoyIdForResource(zone, resourceId).join();
+    assertTrue(result.isPresent());
+    assertThat(result.get(), equalTo(envoyId));
   }
 
   private void assertValueAndLease(String key, int expectedCount, long leaseId) {
@@ -341,9 +347,18 @@ public class ZoneStorageTest {
   }
 
   private long grantLease() {
-    final LeaseGrantResponse leaseGrant = client.getLeaseClient().grant(10000).join();
+    return grantLease(10000);
+  }
+
+  private long grantLease(long ttl) {
+    final LeaseGrantResponse leaseGrant = client.getLeaseClient().grant(ttl).join();
     final long leaseId = leaseGrant.getID();
-    client.getLeaseClient().keepAlive(leaseId);
+
     return leaseId;
+  }
+
+  private void revokeLease(long leaseId) {
+    client.getLeaseClient().revoke(leaseId);
+
   }
 }

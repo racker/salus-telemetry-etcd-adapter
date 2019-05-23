@@ -20,16 +20,10 @@ import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_ACTIVE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPECTED;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING;
-import static com.rackspace.salus.telemetry.etcd.types.Keys.PREFIX_ZONE_ACTIVE;
-import static com.rackspace.salus.telemetry.etcd.types.Keys.PREFIX_ZONE_EXPECTED;
-import static com.rackspace.salus.telemetry.etcd.types.Keys.PREFIX_ZONE_EXPIRING;
-import static com.rackspace.salus.telemetry.etcd.types.Keys.TRACKING_KEY_ZONE_ACTIVE;
-import static com.rackspace.salus.telemetry.etcd.types.Keys.TRACKING_KEY_ZONE_EXPECTED;
-import static com.rackspace.salus.telemetry.etcd.types.Keys.TRACKING_KEY_ZONE_EXPIRING;
 
 import com.coreos.jetcd.Client;
 import com.coreos.jetcd.KV;
-import com.coreos.jetcd.Watch.Watcher;
+import com.coreos.jetcd.Watch;
 import com.coreos.jetcd.data.ByteSequence;
 import com.coreos.jetcd.data.KeyValue;
 import com.coreos.jetcd.kv.DeleteResponse;
@@ -44,12 +38,7 @@ import com.coreos.jetcd.options.GetOption.SortOrder;
 import com.coreos.jetcd.options.GetOption.SortTarget;
 import com.coreos.jetcd.options.LeaseOption;
 import com.coreos.jetcd.options.PutOption;
-import com.coreos.jetcd.options.WatchOption;
-import com.coreos.jetcd.options.WatchOption.Builder;
 import com.coreos.jetcd.watch.WatchEvent;
-import com.rackspace.salus.telemetry.etcd.handler.ActiveZoneEventProcessor;
-import com.rackspace.salus.telemetry.etcd.handler.ExpectedZoneEventProcessor;
-import com.rackspace.salus.telemetry.etcd.handler.ExpiringZoneEventProcessor;
 import com.rackspace.salus.telemetry.etcd.types.EtcdStorageException;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
 import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
@@ -59,7 +48,6 @@ import javax.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.util.Assert;
 
 /**
  * Encapsulates the aspects of reading, updating, and watching the etcd aspect of zones.
@@ -129,7 +117,7 @@ public class ZoneStorage {
 
           if (getResponse.getKvs().isEmpty()) {
             throw new EtcdStorageException(
-                String.format("Expected key not present: %s", key.toStringUtf8()));
+                String.format("Active zone key not present: %s", key.toStringUtf8()));
           }
 
           final KeyValue kvEntry = getResponse.getKvs().get(0);
@@ -255,7 +243,7 @@ public class ZoneStorage {
    *
    * @return A completable future containing the revision, or 0 if the key is not found.
    */
-  private CompletableFuture<Long> getRevisionOfKey(String key) {
+  public CompletableFuture<Long> getRevisionOfKey(String key) {
 
     final ByteSequence trackingKey = ByteSequence.fromString(key);
 
@@ -282,75 +270,6 @@ public class ZoneStorage {
             return 0L;
           }
         });
-  }
-
-  /**
-   * Sets up asynchronous watching of the expected zone key range.
-   *
-   * @param listener the listener that will be invoked when changes related to expected zones occur
-   * @return a future that is completed when the watcher is setup and being processed. The contained
-   * {@link Watcher} is provided only for testing/informational purposes.
-   */
-  public CompletableFuture<Watcher> watchExpectedZones(ZoneStorageListener listener) {
-    return watchZones(TRACKING_KEY_ZONE_EXPECTED, PREFIX_ZONE_EXPECTED, listener);
-  }
-
-  public CompletableFuture<Watcher> watchActiveZones(ZoneStorageListener listener) {
-    return watchZones(TRACKING_KEY_ZONE_ACTIVE, PREFIX_ZONE_ACTIVE, listener);
-  }
-
-  public CompletableFuture<Watcher> watchExpiringZones(ZoneStorageListener listener) {
-    return watchZones(TRACKING_KEY_ZONE_EXPIRING, PREFIX_ZONE_EXPIRING, listener);
-  }
-
-  public CompletableFuture<Watcher> watchZones(String trackingKey, String watchPrefixStr, ZoneStorageListener listener) {
-    Assert.notNull(listener, "A ZoneStorageListener is required");
-
-    // first we need to see if a previous app was watching the zones
-    return
-        getRevisionOfKey(trackingKey)
-            .thenApply(watchRevision -> {
-              log.debug("Watching {} from revision {}", watchPrefixStr, watchRevision);
-
-              final ByteSequence watchPrefix = ByteSequence
-                  .fromString(watchPrefixStr);
-
-              final Builder watchOptionBuilder = WatchOption.newBuilder()
-                  .withPrefix(watchPrefix)
-                  .withPrevKV(true)
-                  .withRevision(watchRevision);
-
-              final Watcher zoneWatcher = etcd.getWatchClient().watch(
-                  watchPrefix,
-                  watchOptionBuilder.build()
-              );
-
-              switch (trackingKey) {
-                case TRACKING_KEY_ZONE_EXPECTED:
-                  new Thread(
-                      new ExpectedZoneEventProcessor(zoneWatcher, listener, this),
-                      "expectedZoneWatcher")
-                      .start();
-                  break;
-                case TRACKING_KEY_ZONE_ACTIVE:
-                  new Thread(
-                      new ActiveZoneEventProcessor(zoneWatcher, listener, this),
-                      "activeZoneWatcher")
-                      .start();
-                  break;
-                case TRACKING_KEY_ZONE_EXPIRING:
-                  new Thread(
-                      new ExpiringZoneEventProcessor(zoneWatcher, listener, this),
-                      "expiringZoneWatcher")
-                      .start();
-                  break;
-                default:
-                  log.error("Attempting to process unknown tracking key: {}", trackingKey);
-                  break;
-              }
-
-              return zoneWatcher;
-            });
   }
 
   public CompletableFuture<PutResponse> createExpiringEntry(ResolvedZone zone, String resourceId, String envoyId, long pollerTimeout) {
@@ -413,6 +332,10 @@ public class ZoneStorage {
 
   public boolean isRunning() {
     return running;
+  }
+
+  public Watch getWatchClient() {
+    return etcd.getWatchClient();
   }
 
   @PreDestroy
