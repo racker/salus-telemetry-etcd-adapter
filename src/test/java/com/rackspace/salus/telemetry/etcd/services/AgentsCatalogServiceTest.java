@@ -17,6 +17,7 @@
 package com.rackspace.salus.telemetry.etcd.services;
 
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildGetResponse;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.eq;
@@ -40,12 +41,14 @@ import com.google.protobuf.ByteString;
 import com.rackspace.salus.telemetry.etcd.types.AgentInstallSelector;
 import com.rackspace.salus.telemetry.model.AgentRelease;
 import com.rackspace.salus.telemetry.model.AgentType;
+import com.rackspace.salus.telemetry.model.NotFoundException;
 import com.rackspace.salus.telemetry.model.OperatingSystem;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import org.junit.Before;
 import org.junit.Test;
@@ -147,6 +150,38 @@ public class AgentsCatalogServiceTest {
                 any(ByteSequence.class)
         );
         verifyNoMoreInteractions(labelManagement, kv);
+    }
+
+    @Test(expected = NotFoundException.class)
+    public void testAgentInstall_missingRelease() throws Throwable {
+        when(kv.get(ByteSequence.fromString("/agentsById/ai1")))
+            .thenReturn(
+                CompletableFuture.completedFuture(
+                    new GetResponse(
+                        RangeResponse.newBuilder()
+                            .setCount(0)
+                            .build()
+                    )
+                )
+            );
+
+        // EXECUTE
+
+        final Map<String, String> labels = new HashMap<>();
+        labels.put("os", "LINUX");
+        labels.put("arch", "X86_64");
+
+        final AgentInstallSelector selector = new AgentInstallSelector()
+            .setId("ais1")
+            .setAgentReleaseId("ai1")
+            .setLabels(labels);
+
+        try {
+            agentsCatalogService.install("t1", selector).join();
+            fail("Expected CompletionException");
+        } catch (CompletionException e) {
+            throw e.getCause();
+        }
     }
 
     private CompletableFuture<PutResponse> buildPutResponse() {
