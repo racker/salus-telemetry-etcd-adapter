@@ -53,7 +53,9 @@ public class Keys {
      */
     public static final String FMT_ZONE_EXPECTED = "/zones/expected/{tenant}/{zoneName}/{resourceId}";
     public static final Pattern PTN_ZONE_EXPECTED = EtcdUtils.patternFromFormat(FMT_ZONE_EXPECTED);
-
+    /**
+     * Value is latest attached envoy ID
+     */
     public static final String FMT_ZONE_EXPIRING = "/zones/expiring/{tenant}/{zoneName}/{resourceId}";
     public static final Pattern PTN_ZONE_EXPIRING = EtcdUtils.patternFromFormat(FMT_ZONE_EXPIRING);
 

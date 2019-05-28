@@ -247,9 +247,6 @@ public class ZoneStorageTest {
 
     WatchEvent event = new WatchEvent(null, kv1, EventType.DELETE);
     revokeLease(leaseId);
-    // This test passes individually without the sleep but needs to wait for the revoke to process
-    // when run as part of the whole suite.
-    Thread.sleep(100);
 
     assertTrue(zoneStorage.isLeaseExpired(event));
   }
@@ -305,7 +302,7 @@ public class ZoneStorageTest {
     when(envoyLeaseTracking.grant(anyString(), anyLong()))
         .thenReturn(CompletableFuture.completedFuture(leaseId));
 
-    zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout);
+    zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout).join();
 
     GetResponse expiringResponse = client.getKVClient()
         .get(ByteSequence.fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
@@ -355,7 +352,7 @@ public class ZoneStorageTest {
   }
 
   private void revokeLease(long leaseId) {
-    client.getLeaseClient().revoke(leaseId);
+    client.getLeaseClient().revoke(leaseId).join();
 
   }
 }
