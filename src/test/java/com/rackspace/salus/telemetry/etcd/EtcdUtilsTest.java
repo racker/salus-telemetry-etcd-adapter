@@ -179,9 +179,9 @@ public class EtcdUtilsTest {
     @Test
     public void testPatternFromFormat_fields() {
         final Pattern result = EtcdUtils
-            .patternFromFormat("/zones/expected/{tenant}/{zoneId}/{resourceId}");
+            .patternFromFormat("/zones/expected/{tenant}/{zoneName}/{resourceId}");
 
-        assertEquals("/zones/expected/(?<tenant>.+?)/(?<zoneId>.+?)/(?<resourceId>.+?)", result.toString());
+        assertEquals("/zones/expected/(?<tenant>.+?)/(?<zoneName>.+?)/(?<resourceId>.+?)", result.toString());
     }
 
     @Test

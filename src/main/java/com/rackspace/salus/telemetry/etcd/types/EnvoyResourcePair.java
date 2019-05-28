@@ -14,16 +14,12 @@
  * limitations under the License.
  */
 
-package com.rackspace.salus.telemetry.etcd.services;
+package com.rackspace.salus.telemetry.etcd.types;
 
-import com.coreos.jetcd.common.exception.EtcdException;
-import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
+import lombok.Data;
 
-public interface ZoneStorageListener {
-
-  void handleNewEnvoyResourceInZone(ResolvedZone resolvedZone);
-
-  void handleExpectedZoneWatcherClosed(EtcdException e);
-
-  void handleEnvoyResourceReassignedInZone(ResolvedZone resolvedZone, String prevEnvoyId, String newEnvoyId);
+@Data
+public class EnvoyResourcePair {
+  String envoyId;
+  String resourceId;
 }
