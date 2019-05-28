@@ -296,7 +296,7 @@ public class AgentsCatalogService {
             .get(buildKey("/agentsById/{agentId}", agentInfoId))
             .thenApply(getResponse -> {
                 if (getResponse.getCount() == 0) {
-                    return null;
+                    throw new NotFoundException("Unable to find agent release by ID");
                 }
 
                 try {
