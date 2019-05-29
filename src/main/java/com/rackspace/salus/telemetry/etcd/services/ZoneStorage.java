@@ -39,11 +39,14 @@ import com.coreos.jetcd.options.GetOption.SortTarget;
 import com.coreos.jetcd.options.LeaseOption;
 import com.coreos.jetcd.options.PutOption;
 import com.coreos.jetcd.watch.WatchEvent;
+import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
 import com.rackspace.salus.telemetry.etcd.types.EtcdStorageException;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
-import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import javax.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -98,16 +101,23 @@ public class ZoneStorage {
   }
 
   public CompletableFuture<Integer> incrementBoundCount(ResolvedZone zone, String resourceId) {
-    return incrementBoundCount(zone, resourceId, 1);
+    return changeBoundCount(zone, resourceId, 1);
   }
 
   public CompletableFuture<Integer> decrementBoundCount(ResolvedZone zone, String resourceId) {
-    return incrementBoundCount(zone, resourceId, -1);
+    return changeBoundCount(zone, resourceId, -1);
   }
 
-  public CompletableFuture<Integer> incrementBoundCount(ResolvedZone zone, String resourceId,
-                                                        int amount) {
-    log.debug("Incrementing bound count of resource={} in zone={}", resourceId, zone);
+  /**
+   * Changes the assigned count of bound monitors to an active envoy-resource
+   * @param zone the zone of the envoy-resource
+   * @param resourceId the envoy's resource ID
+   * @param amount the amount to chagne the assignmnet count, positive or negative
+   * @return the new assignment count
+   */
+  public CompletableFuture<Integer> changeBoundCount(ResolvedZone zone, String resourceId,
+                                                     int amount) {
+    log.debug("Changing bound count of resource={} in zone={} by amount={}", resourceId, zone, amount);
 
     final ByteSequence key = buildKey(
         FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId);
@@ -155,7 +165,7 @@ public class ZoneStorage {
                       "Re-trying incrementing bound count of resource={} in zone={} due to collision",
                       resourceId, zone
                   );
-                  return incrementBoundCount(zone, resourceId, amount);
+                  return changeBoundCount(zone, resourceId, amount);
                 }
 
               });
@@ -233,6 +243,57 @@ public class ZoneStorage {
                       .withCountOnly(true)
                       .build()
       ).thenApply(GetResponse::getCount);
+  }
+
+  /**
+   * Returns a snapshot of the envoy-resources in the requested zone and the current binding
+   * counts for each.
+   * @param zone the zone to evaluate
+   * @return a mapping of envoy-resource to the binding count
+   */
+  public CompletableFuture<Map<EnvoyResourcePair, Integer>> getZoneBindingCounts(
+      ResolvedZone zone) {
+    final ByteSequence prefix =
+        buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
+
+    return etcd.getKVClient().get(
+        prefix,
+        GetOption.newBuilder()
+            .withPrefix(prefix)
+            .build()
+    ).thenApply(getResponse -> {
+
+      final Map<EnvoyResourcePair, Integer> bindingCounts = new HashMap<>();
+
+      for (KeyValue kv : getResponse.getKvs()) {
+        final String key = kv.getKey().toStringUtf8();
+        final int count = Integer.parseInt(kv.getValue().toStringUtf8(), 10);
+        final String resourceId = key.substring(key.lastIndexOf("/") + 1);
+
+        try {
+          final Optional<String> envoyId = getEnvoyIdForResource(zone, resourceId).get();
+
+          if (envoyId.isPresent()) {
+
+            bindingCounts.put(
+                new EnvoyResourcePair().setResourceId(resourceId).setEnvoyId(envoyId.get()),
+                count
+            );
+
+          }
+          else {
+            log.warn("No envoy ID found for resource={} in zone={}", resourceId, zone);
+          }
+        } catch (InterruptedException | ExecutionException e) {
+          log.warn("Unexpected issue while getting envoy ID of resource={} in zone={}",
+              resourceId, zone);
+        }
+
+      }
+
+      return bindingCounts;
+    });
+
   }
 
   /**
