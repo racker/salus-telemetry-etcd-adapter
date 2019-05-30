@@ -35,11 +35,13 @@ import com.coreos.jetcd.lease.LeaseGrantResponse;
 import com.coreos.jetcd.options.LeaseOption;
 import com.coreos.jetcd.watch.WatchEvent;
 import com.coreos.jetcd.watch.WatchEvent.EventType;
-import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
 import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
+import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
 import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -166,7 +168,7 @@ public class ZoneStorageTest {
 
     assertValueAndLease("/zones/active/t-1/zone-1/r-1", 0, leaseId);
 
-    zoneStorage.incrementBoundCount(zone, "r-1", 12).join();
+    zoneStorage.changeBoundCount(zone, "r-1", 12).join();
 
     assertValueAndLease("/zones/active/t-1/zone-1/r-1", 12, leaseId);
   }
@@ -178,7 +180,7 @@ public class ZoneStorageTest {
     final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
     zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
 
-    zoneStorage.incrementBoundCount(zone, "r-1", 12).join();
+    zoneStorage.changeBoundCount(zone, "r-1", 12).join();
 
     assertValueAndLease("/zones/active/t-1/zone-1/r-1", 12, leaseId);
 
@@ -309,7 +311,7 @@ public class ZoneStorageTest {
         .join();
     assertThat(expiringResponse.getKvs(), hasSize(1));
 
-    zoneStorage.removeExpiringEntry(zone, resourceId);
+    zoneStorage.removeExpiringEntry(zone, resourceId).join();
 
     expiringResponse = client.getKVClient()
         .get(ByteSequence.fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
@@ -328,6 +330,38 @@ public class ZoneStorageTest {
     Optional<String> result = zoneStorage.getEnvoyIdForResource(zone, resourceId).join();
     assertTrue(result.isPresent());
     assertThat(result.get(), equalTo(envoyId));
+  }
+
+  @Test
+  public void testGetZoneBindingCounts_typical() {
+    final long leaseId = grantLease();
+    final ResolvedZone zone = createPrivateZone("t-1", "r-1");
+
+    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
+    zoneStorage.registerEnvoyInZone(zone, "e-2", "r-2", leaseId).join();
+    zoneStorage.registerEnvoyInZone(zone, "e-3", "r-3", leaseId).join();
+
+    zoneStorage.changeBoundCount(zone, "r-1", 5).join();
+    zoneStorage.changeBoundCount(zone, "r-2", 7).join();
+    zoneStorage.changeBoundCount(zone, "r-3", 2).join();
+
+    final Map<EnvoyResourcePair, Integer> result = zoneStorage.getZoneBindingCounts(zone).join();
+
+    final Map<EnvoyResourcePair, Integer> expected = new HashMap<>();
+    expected.put(new EnvoyResourcePair().setEnvoyId("e-1").setResourceId("r-1"), 5);
+    expected.put(new EnvoyResourcePair().setEnvoyId("e-2").setResourceId("r-2"), 7);
+    expected.put(new EnvoyResourcePair().setEnvoyId("e-3").setResourceId("r-3"), 2);
+
+    assertThat(result, equalTo(expected));
+  }
+
+  @Test
+  public void testGetZoneBindingCounts_emptyZone() {
+    final ResolvedZone zone = createPrivateZone("t-1", "r-1");
+
+    final Map<EnvoyResourcePair, Integer> result = zoneStorage.getZoneBindingCounts(zone).join();
+
+    assertThat(result.isEmpty(), equalTo(true));
   }
 
   private void assertValueAndLease(String key, int expectedCount, long leaseId) {
