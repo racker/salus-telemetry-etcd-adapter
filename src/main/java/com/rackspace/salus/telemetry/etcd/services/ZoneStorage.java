@@ -297,6 +297,38 @@ public class ZoneStorage {
   }
 
   /**
+   * Returns a mapping of envoy id to resource id for the provided zone.
+   * @param zone The zone to get all envoy id -> resource id mappings.
+   * @return The mappings found for the zone.
+   */
+  public CompletableFuture<Map<String, String>> getEnvoyIdToResourceIdMap(
+      ResolvedZone zone) {
+    final ByteSequence prefix =
+        buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
+
+    return etcd.getKVClient().get(
+        prefix,
+        GetOption.newBuilder()
+            .withPrefix(prefix)
+            .build()
+    ).thenApply(getResponse -> {
+
+      final Map<String, String> envoyResourceMap = new HashMap<>();
+
+      for (KeyValue kv : getResponse.getKvs()) {
+        final String key = kv.getKey().toStringUtf8();
+        final String resourceId = key.substring(key.lastIndexOf("/") + 1);
+        final String envoyId = kv.getValue().toStringUtf8();
+
+        envoyResourceMap.put(envoyId, resourceId);
+      }
+
+      return envoyResourceMap;
+    });
+
+  }
+
+  /**
    * Retrieves the latest written revision of the events key.
    *
    * See {@link com.rackspace.salus.telemetry.etcd.types.Keys} for a description of how the tracking

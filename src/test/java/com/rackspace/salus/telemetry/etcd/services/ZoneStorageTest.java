@@ -364,6 +364,25 @@ public class ZoneStorageTest {
     assertThat(result.isEmpty(), equalTo(true));
   }
 
+  @Test
+  public void testGetEnvoyIdToResourceIdMap() {
+    final long leaseId = grantLease();
+    final ResolvedZone zone = createPrivateZone("t-1", "r-1");
+
+    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
+    zoneStorage.registerEnvoyInZone(zone, "e-2", "r-2", leaseId).join();
+    zoneStorage.registerEnvoyInZone(zone, "e-3", "r-3", leaseId).join();
+
+    final Map<String, String> result = zoneStorage.getEnvoyIdToResourceIdMap(zone).join();
+
+    final Map<String, String> expected = new HashMap<>();
+    expected.put("e-1", "r-1");
+    expected.put("e-2", "r-2");
+    expected.put("e-3", "r-3");
+
+    assertThat(result, equalTo(expected));
+  }
+
   private void assertValueAndLease(String key, int expectedCount, long leaseId) {
     final GetResponse getResponse = client.getKVClient().get(
         ByteSequence.fromString(key)
