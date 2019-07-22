@@ -22,7 +22,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-@ConfigurationProperties("etcd")
+@ConfigurationProperties("salus.etcd")
 @Component
 @Data
 public class EtcdProperties {
