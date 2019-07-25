@@ -2,23 +2,24 @@ package com.rackspace.salus.telemetry.etcd.services;
 
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 
-import com.coreos.jetcd.Client;
-import com.coreos.jetcd.data.ByteSequence;
-import com.coreos.jetcd.kv.TxnResponse;
-import com.coreos.jetcd.op.Op;
-import com.coreos.jetcd.options.DeleteOption;
-import com.coreos.jetcd.options.GetOption;
-import com.coreos.jetcd.options.GetOption.SortOrder;
-import com.coreos.jetcd.options.GetOption.SortTarget;
-import com.coreos.jetcd.options.PutOption;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.common.util.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.types.KeyRange;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
 import com.rackspace.salus.telemetry.etcd.types.WorkAllocationRealm;
+import io.etcd.jetcd.ByteSequence;
+import io.etcd.jetcd.Client;
+import io.etcd.jetcd.kv.TxnResponse;
+import io.etcd.jetcd.op.Op;
+import io.etcd.jetcd.options.DeleteOption;
+import io.etcd.jetcd.options.GetOption;
+import io.etcd.jetcd.options.GetOption.SortOrder;
+import io.etcd.jetcd.options.GetOption.SortTarget;
+import io.etcd.jetcd.options.PutOption;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -84,7 +85,7 @@ public class WorkAllocationPartitionService {
                         .readValue(keyValue.getValue().getBytes(), KeyRange.class);
                   } catch (IOException e) {
                     log.warn("Failed to deserialize keyValue={} for realm={}",
-                        keyValue.getKey().toStringUtf8(), realm, e
+                        keyValue.getKey().toString(StandardCharsets.UTF_8), realm, e
                     );
                     return null;
                   }
@@ -122,7 +123,7 @@ public class WorkAllocationPartitionService {
       final ByteSequence value;
       try {
         value = ByteSequence
-            .fromBytes(objectMapper.writeValueAsBytes(keyRange));
+            .from(objectMapper.writeValueAsBytes(keyRange));
       } catch (JsonProcessingException e) {
         log.error("Failed to serialize keyRange={}", keyRange, e);
         return CompletableFuture.completedFuture(false);

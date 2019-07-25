@@ -22,23 +22,21 @@ import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-import com.coreos.jetcd.Client;
-import com.coreos.jetcd.data.KeyValue;
-import com.coreos.jetcd.lease.LeaseGrantResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.common.util.KeyHashing;
 import com.rackspace.salus.telemetry.model.ResourceInfo;
+import io.etcd.jetcd.Client;
+import io.etcd.jetcd.KeyValue;
 import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
+import io.etcd.jetcd.lease.LeaseGrantResponse;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.URI;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -58,10 +56,9 @@ public class EnvoyResourceManagementTest {
     public static class TestConfig {
         @Bean
         public Client getClient() {
-            final List<String> endpoints = etcd.cluster().getClientEndpoints().stream()
-                    .map(URI::toString)
-                    .collect(Collectors.toList());
-            return Client.builder().endpoints(endpoints).build();
+            return Client.builder().endpoints(
+                etcd.cluster().getClientEndpoints()
+            ).build();
         }
     }
 
@@ -145,7 +142,7 @@ public class EnvoyResourceManagementTest {
                             1, getResponse.getCount());
                     KeyValue storedData = getResponse.getKvs().get(0);
 
-                    String key = storedData.getKey().toStringUtf8();
+                    String key = storedData.getKey().toString(StandardCharsets.UTF_8);
                     ResourceInfo resourceInfo;
                     try {
                         resourceInfo = objectMapper.readValue(storedData.getValue().getBytes(), ResourceInfo.class);

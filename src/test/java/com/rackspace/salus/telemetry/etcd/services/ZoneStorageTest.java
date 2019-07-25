@@ -16,7 +16,9 @@
 
 package com.rackspace.salus.telemetry.etcd.services;
 
+import static com.rackspace.salus.telemetry.etcd.EtcdUtils.fromString;
 import static com.rackspace.salus.telemetry.etcd.types.ResolvedZone.createPrivateZone;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -27,24 +29,20 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
-import com.coreos.jetcd.Client;
-import com.coreos.jetcd.data.ByteSequence;
-import com.coreos.jetcd.kv.GetResponse;
-import com.coreos.jetcd.kv.PutResponse;
-import com.coreos.jetcd.lease.LeaseGrantResponse;
-import com.coreos.jetcd.options.LeaseOption;
-import com.coreos.jetcd.watch.WatchEvent;
-import com.coreos.jetcd.watch.WatchEvent.EventType;
 import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
+import io.etcd.jetcd.Client;
+import io.etcd.jetcd.kv.GetResponse;
+import io.etcd.jetcd.kv.PutResponse;
 import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
-import java.net.URI;
+import io.etcd.jetcd.lease.LeaseGrantResponse;
+import io.etcd.jetcd.options.LeaseOption;
+import io.etcd.jetcd.watch.WatchEvent;
+import io.etcd.jetcd.watch.WatchEvent.EventType;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -72,10 +70,9 @@ public class ZoneStorageTest {
 
   @Before
   public void setUp() {
-    final List<String> endpoints = etcd.cluster().getClientEndpoints().stream()
-        .map(URI::toString)
-        .collect(Collectors.toList());
-    client = com.coreos.jetcd.Client.builder().endpoints(endpoints).build();
+    client = io.etcd.jetcd.Client.builder().endpoints(
+        etcd.cluster().getClientEndpoints()
+    ).build();
 
     zoneStorage = new ZoneStorage(client, envoyLeaseTracking);
   }
@@ -95,18 +92,18 @@ public class ZoneStorageTest {
     zoneStorage.registerEnvoyInZone(zone, "123-456", "r-1", leaseId).join();
 
     final GetResponse activeResponse = client.getKVClient()
-        .get(ByteSequence.fromString("/zones/active/t-1/zone-1/r-1"))
+        .get(fromString("/zones/active/t-1/zone-1/r-1"))
         .join();
     assertThat(activeResponse.getKvs(), hasSize(1));
     assertThat(activeResponse.getKvs().get(0).getLease(), equalTo(leaseId));
-    assertThat(activeResponse.getKvs().get(0).getValue().toStringUtf8(), equalTo("0000000000"));
+    assertThat(activeResponse.getKvs().get(0).getValue().toString(UTF_8), equalTo("0000000000"));
 
     final GetResponse expectedResponse = client.getKVClient()
-        .get(ByteSequence.fromString("/zones/expected/t-1/zone-1/r-1"))
+        .get(fromString("/zones/expected/t-1/zone-1/r-1"))
         .join();
     assertThat(expectedResponse.getKvs(), hasSize(1));
     assertThat(expectedResponse.getKvs().get(0).getLease(), equalTo(0L));
-    assertThat(expectedResponse.getKvs().get(0).getValue().toStringUtf8(), equalTo("123-456"));
+    assertThat(expectedResponse.getKvs().get(0).getValue().toString(UTF_8), equalTo("123-456"));
   }
 
   @Test
@@ -234,8 +231,8 @@ public class ZoneStorageTest {
   @Test
   public void testIsLeaseExpired_notExpired() {
     long leaseId = grantLease();
-    com.coreos.jetcd.api.KeyValue kv = com.coreos.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
-    com.coreos.jetcd.data.KeyValue kv1 = new com.coreos.jetcd.data.KeyValue(kv);
+    io.etcd.jetcd.api.KeyValue kv = io.etcd.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
+    io.etcd.jetcd.KeyValue kv1 = new io.etcd.jetcd.KeyValue(kv);
     WatchEvent event = new WatchEvent(null, kv1, EventType.DELETE);
 
     assertFalse(zoneStorage.isLeaseExpired(event));
@@ -244,8 +241,8 @@ public class ZoneStorageTest {
   @Test
   public void testIsLeaseExpired_revoked() throws Exception {
     long leaseId = grantLease();
-    com.coreos.jetcd.api.KeyValue kv = com.coreos.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
-    com.coreos.jetcd.data.KeyValue kv1 = new com.coreos.jetcd.data.KeyValue(kv);
+    io.etcd.jetcd.api.KeyValue kv = io.etcd.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
+    io.etcd.jetcd.KeyValue kv1 = new io.etcd.jetcd.KeyValue(kv);
 
     WatchEvent event = new WatchEvent(null, kv1, EventType.DELETE);
     revokeLease(leaseId);
@@ -256,8 +253,8 @@ public class ZoneStorageTest {
   @Test
   public void testIsLeaseExpired_expired() throws Exception {
     long leaseId = grantLease(0);
-    com.coreos.jetcd.api.KeyValue kv = com.coreos.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
-    com.coreos.jetcd.data.KeyValue kv1 = new com.coreos.jetcd.data.KeyValue(kv);
+    io.etcd.jetcd.api.KeyValue kv = io.etcd.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
+    io.etcd.jetcd.KeyValue kv1 = new io.etcd.jetcd.KeyValue(kv);
     WatchEvent event = new WatchEvent(null, kv1, EventType.DELETE);
 
     // this actually creates a lease of 1s, so we have to wait for it to expire.
@@ -282,7 +279,7 @@ public class ZoneStorageTest {
     assertFalse(response.hasPrevKv());
 
     final GetResponse expiringResponse = client.getKVClient()
-        .get(ByteSequence.fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
+        .get(fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
         .join();
     assertThat(expiringResponse.getKvs(), hasSize(1));
 
@@ -307,14 +304,14 @@ public class ZoneStorageTest {
     zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout).join();
 
     GetResponse expiringResponse = client.getKVClient()
-        .get(ByteSequence.fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
+        .get(fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
         .join();
     assertThat(expiringResponse.getKvs(), hasSize(1));
 
     zoneStorage.removeExpiringEntry(zone, resourceId).join();
 
     expiringResponse = client.getKVClient()
-        .get(ByteSequence.fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
+        .get(fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
         .join();
     assertThat(expiringResponse.getKvs(), hasSize(0));
   }
@@ -385,11 +382,11 @@ public class ZoneStorageTest {
 
   private void assertValueAndLease(String key, int expectedCount, long leaseId) {
     final GetResponse getResponse = client.getKVClient().get(
-        ByteSequence.fromString(key)
+        fromString(key)
     ).join();
 
     assertThat(getResponse.getKvs(), hasSize(1));
-    assertThat(getResponse.getKvs().get(0).getValue().toStringUtf8(), equalTo(String.format("%010d", expectedCount)));
+    assertThat(getResponse.getKvs().get(0).getValue().toString(UTF_8), equalTo(String.format("%010d", expectedCount)));
     assertThat(getResponse.getKvs().get(0).getLease(), equalTo(leaseId));
   }
 
