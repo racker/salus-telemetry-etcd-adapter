@@ -18,6 +18,7 @@
 
 package com.rackspace.salus.telemetry.etcd.services;
 
+import static com.rackspace.salus.telemetry.etcd.EtcdUtils.EXIT_CODE_ETCD_FAILED;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.parseValue;
 
@@ -179,7 +180,14 @@ public class EnvoyResourceManagement {
           buildKey(prefix, min),
           WatchOption.newBuilder().withRange(buildKey(prefix, max + '\0'))
               .withPrevKV(true).withRevision(revision).build(),
-          onNext
+          onNext,
+          throwable -> handleWatchError(prefix, throwable)
       );
     }
+
+  private void handleWatchError(String prefix, Throwable throwable) {
+    log.error("Error during watch of {}", prefix, throwable);
+    // Spring will gracefully shutdown via shutdown hook
+    System.exit(EXIT_CODE_ETCD_FAILED);
+  }
 }

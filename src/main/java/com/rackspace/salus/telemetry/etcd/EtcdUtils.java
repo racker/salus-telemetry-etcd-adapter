@@ -43,6 +43,7 @@ import java.util.regex.Pattern;
  */
 public class EtcdUtils {
 
+    public static final int EXIT_CODE_ETCD_FAILED = 1;
     private static final Pattern KEY_PLACEHOLDER = Pattern.compile("\\{.+?\\}");
 
     public static ByteSequence fromString(String utf8string) {
