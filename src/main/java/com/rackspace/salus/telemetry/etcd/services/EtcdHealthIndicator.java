@@ -16,9 +16,9 @@
 
 package com.rackspace.salus.telemetry.etcd.services;
 
-import com.coreos.jetcd.Client;
-import com.coreos.jetcd.data.ByteSequence;
-import com.coreos.jetcd.kv.GetResponse;
+import com.rackspace.salus.telemetry.etcd.EtcdUtils;
+import io.etcd.jetcd.Client;
+import io.etcd.jetcd.kv.GetResponse;
 import java.util.concurrent.ExecutionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.Health;
@@ -41,7 +41,7 @@ public class EtcdHealthIndicator implements HealthIndicator {
   @Override
   public Health health() {
     try {
-      final GetResponse resp = etcd.getKVClient().get(ByteSequence.fromString("/"))
+      final GetResponse resp = etcd.getKVClient().get(EtcdUtils.fromString("/"))
           .get();
       return Health.up().build();
     } catch (InterruptedException | ExecutionException e) {

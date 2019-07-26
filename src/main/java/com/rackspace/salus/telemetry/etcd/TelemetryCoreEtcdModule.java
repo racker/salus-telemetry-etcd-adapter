@@ -16,9 +16,9 @@
 
 package com.rackspace.salus.telemetry.etcd;
 
-import com.coreos.jetcd.Client;
 import com.rackspace.salus.common.util.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.services.EtcdHealthIndicator;
+import io.etcd.jetcd.Client;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.context.annotation.Bean;

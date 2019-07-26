@@ -6,21 +6,19 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
-import com.coreos.jetcd.Client;
-import com.coreos.jetcd.data.ByteSequence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.common.util.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.types.KeyRange;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
 import com.rackspace.salus.telemetry.etcd.types.WorkAllocationRealm;
+import io.etcd.jetcd.ByteSequence;
+import io.etcd.jetcd.Client;
 import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import java.io.IOException;
-import java.net.URI;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -46,10 +44,9 @@ public class WorkAllocationPartitionServiceTest {
 
   @Before
   public void setUp() throws Exception {
-    final List<String> endpoints = etcd.cluster().getClientEndpoints().stream()
-        .map(URI::toString)
-        .collect(Collectors.toList());
-    client = com.coreos.jetcd.Client.builder().endpoints(endpoints).build();
+    client = io.etcd.jetcd.Client.builder().endpoints(
+        etcd.cluster().getClientEndpoints()
+    ).build();
 
     service = new WorkAllocationPartitionService(
         client, new KeyHashing(), objectMapper, idGenerator);

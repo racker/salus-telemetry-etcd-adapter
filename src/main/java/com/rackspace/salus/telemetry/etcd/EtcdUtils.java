@@ -18,18 +18,19 @@
 
 package com.rackspace.salus.telemetry.etcd;
 
-import com.coreos.jetcd.api.DeleteRangeResponse;
-import com.coreos.jetcd.api.RangeResponse;
-import com.coreos.jetcd.data.ByteSequence;
-import com.coreos.jetcd.data.KeyValue;
-import com.coreos.jetcd.kv.DeleteResponse;
-import com.coreos.jetcd.kv.GetResponse;
-import com.coreos.jetcd.kv.PutResponse;
-import com.coreos.jetcd.kv.TxnResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
+import io.etcd.jetcd.ByteSequence;
+import io.etcd.jetcd.KeyValue;
+import io.etcd.jetcd.api.DeleteRangeResponse;
+import io.etcd.jetcd.api.RangeResponse;
+import io.etcd.jetcd.kv.DeleteResponse;
+import io.etcd.jetcd.kv.GetResponse;
+import io.etcd.jetcd.kv.PutResponse;
+import io.etcd.jetcd.kv.TxnResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BinaryOperator;
@@ -42,7 +43,12 @@ import java.util.regex.Pattern;
  */
 public class EtcdUtils {
 
+    public static final int EXIT_CODE_ETCD_FAILED = 1;
     private static final Pattern KEY_PLACEHOLDER = Pattern.compile("\\{.+?\\}");
+
+    public static ByteSequence fromString(String utf8string) {
+        return ByteSequence.from(utf8string, StandardCharsets.UTF_8);
+    }
 
     /**
      * Replaces placeholders in the <code>format</code> string with the <code>values</code>
@@ -78,7 +84,7 @@ public class EtcdUtils {
         }
         matcher.appendTail(sb);
 
-        return ByteSequence.fromString(sb.toString());
+        return fromString(sb.toString());
     }
 
     /**
@@ -117,7 +123,7 @@ public class EtcdUtils {
     }
 
     public static ByteSequence buildValue(ObjectMapper objectMapper, Object o) throws JsonProcessingException {
-        return ByteSequence.fromBytes(
+        return ByteSequence.from(
                 objectMapper.writeValueAsBytes(o)
         );
     }
@@ -134,7 +140,7 @@ public class EtcdUtils {
      */
     public static CompletableFuture<PutResponse> completedPutResponse() {
         return CompletableFuture.completedFuture(
-                new PutResponse(com.coreos.jetcd.api.PutResponse.newBuilder()
+                new PutResponse(io.etcd.jetcd.api.PutResponse.newBuilder()
                         .build())
         );
     }
@@ -151,7 +157,7 @@ public class EtcdUtils {
 
     public static CompletableFuture<TxnResponse> completedTxnResponse() {
         return CompletableFuture.completedFuture(new TxnResponse(
-            com.coreos.jetcd.api.TxnResponse.newBuilder().build()
+            io.etcd.jetcd.api.TxnResponse.newBuilder().build()
         ));
     }
 
@@ -188,7 +194,7 @@ public class EtcdUtils {
                 new GetResponse(
                         RangeResponse.newBuilder()
                                 .addKvs(
-                                        com.coreos.jetcd.api.KeyValue.newBuilder()
+                                        io.etcd.jetcd.api.KeyValue.newBuilder()
                                                 .setKey(ByteString.copyFromUtf8(key))
                                                 .setValue(ByteString.copyFrom(
                                                         objectMapper.writeValueAsBytes(value)

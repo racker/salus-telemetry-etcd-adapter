@@ -18,29 +18,32 @@
 
 package com.rackspace.salus.telemetry.etcd.services;
 
+import static com.rackspace.salus.telemetry.etcd.EtcdUtils.EXIT_CODE_ETCD_FAILED;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.parseValue;
 
-import com.coreos.jetcd.Client;
-import com.coreos.jetcd.Watch;
-import com.coreos.jetcd.data.ByteSequence;
-import com.coreos.jetcd.data.KeyValue;
-import com.coreos.jetcd.kv.GetResponse;
-import com.coreos.jetcd.options.GetOption;
-import com.coreos.jetcd.options.PutOption;
-import com.coreos.jetcd.options.WatchOption;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.common.util.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
 import com.rackspace.salus.telemetry.model.ResourceInfo;
+import io.etcd.jetcd.ByteSequence;
+import io.etcd.jetcd.Client;
+import io.etcd.jetcd.KeyValue;
+import io.etcd.jetcd.Watch;
+import io.etcd.jetcd.kv.GetResponse;
+import io.etcd.jetcd.options.GetOption;
+import io.etcd.jetcd.options.PutOption;
+import io.etcd.jetcd.options.WatchOption;
+import io.etcd.jetcd.watch.WatchResponse;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -93,7 +96,7 @@ public class EnvoyResourceManagement {
         final String resourceKeyHash = hashing.hash(resourceKey);
         final ByteSequence resourceInfoBytes;
         try {
-            resourceInfoBytes = ByteSequence.fromBytes(objectMapper.writeValueAsBytes(resourceInfo));
+            resourceInfoBytes = ByteSequence.from(objectMapper.writeValueAsBytes(resourceInfo));
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to marshal ResourceInfo", e);
         }
@@ -171,9 +174,20 @@ public class EnvoyResourceManagement {
                 GetOption.newBuilder().withRange(buildKey(prefix, max + '\0')).build());
     }
 
-    public Watch.Watcher getWatchOverRange(String prefix, String min, String max, long revision) {
-        return etcd.getWatchClient().watch(buildKey(prefix, min),
-                WatchOption.newBuilder().withRange(buildKey(prefix, max + '\0'))
-                        .withPrevKV(true).withRevision(revision).build());
+    public Watch.Watcher createWatchOverRange(String prefix, String min, String max, long revision,
+                                              Consumer<WatchResponse> onNext) {
+      return etcd.getWatchClient().watch(
+          buildKey(prefix, min),
+          WatchOption.newBuilder().withRange(buildKey(prefix, max + '\0'))
+              .withPrevKV(true).withRevision(revision).build(),
+          onNext,
+          throwable -> handleWatchError(prefix, throwable)
+      );
     }
+
+  private void handleWatchError(String prefix, Throwable throwable) {
+    log.error("Error during watch of {}", prefix, throwable);
+    // Spring will gracefully shutdown via shutdown hook
+    System.exit(EXIT_CODE_ETCD_FAILED);
+  }
 }

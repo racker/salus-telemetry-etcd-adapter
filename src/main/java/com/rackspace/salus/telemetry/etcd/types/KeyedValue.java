@@ -18,7 +18,7 @@
 
 package com.rackspace.salus.telemetry.etcd.types;
 
-import com.coreos.jetcd.data.ByteSequence;
+import io.etcd.jetcd.ByteSequence;
 import lombok.Data;
 
 /**
@@ -38,7 +38,7 @@ import lombok.Data;
          );
      } catch (IOException e) {
          log.warn("Unable to parse AgentInstallSelector from {}",
-         kv.getValue().toStringUtf8(), e);
+         kv.getValue().toString(StandardCharsets.UTF_8), e);
          return null;
      }
  })

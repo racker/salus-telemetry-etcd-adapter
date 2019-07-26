@@ -17,31 +17,33 @@
 package com.rackspace.salus.telemetry.etcd.services;
 
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
+import static com.rackspace.salus.telemetry.etcd.EtcdUtils.fromString;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_ACTIVE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPECTED;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING;
 
-import com.coreos.jetcd.Client;
-import com.coreos.jetcd.KV;
-import com.coreos.jetcd.Watch;
-import com.coreos.jetcd.data.ByteSequence;
-import com.coreos.jetcd.data.KeyValue;
-import com.coreos.jetcd.kv.DeleteResponse;
-import com.coreos.jetcd.kv.GetResponse;
-import com.coreos.jetcd.kv.PutResponse;
-import com.coreos.jetcd.lease.LeaseTimeToLiveResponse;
-import com.coreos.jetcd.op.Cmp;
-import com.coreos.jetcd.op.CmpTarget;
-import com.coreos.jetcd.op.Op;
-import com.coreos.jetcd.options.GetOption;
-import com.coreos.jetcd.options.GetOption.SortOrder;
-import com.coreos.jetcd.options.GetOption.SortTarget;
-import com.coreos.jetcd.options.LeaseOption;
-import com.coreos.jetcd.options.PutOption;
-import com.coreos.jetcd.watch.WatchEvent;
 import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
 import com.rackspace.salus.telemetry.etcd.types.EtcdStorageException;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
+import io.etcd.jetcd.ByteSequence;
+import io.etcd.jetcd.Client;
+import io.etcd.jetcd.KV;
+import io.etcd.jetcd.KeyValue;
+import io.etcd.jetcd.Watch;
+import io.etcd.jetcd.kv.DeleteResponse;
+import io.etcd.jetcd.kv.GetResponse;
+import io.etcd.jetcd.kv.PutResponse;
+import io.etcd.jetcd.lease.LeaseTimeToLiveResponse;
+import io.etcd.jetcd.op.Cmp;
+import io.etcd.jetcd.op.CmpTarget;
+import io.etcd.jetcd.op.Op;
+import io.etcd.jetcd.options.GetOption;
+import io.etcd.jetcd.options.GetOption.SortOrder;
+import io.etcd.jetcd.options.GetOption.SortTarget;
+import io.etcd.jetcd.options.LeaseOption;
+import io.etcd.jetcd.options.PutOption;
+import io.etcd.jetcd.watch.WatchEvent;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -87,14 +89,14 @@ public class ZoneStorage {
     return CompletableFuture.allOf(
         kv.put(
             buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId),
-            ByteSequence.fromString(String.format(FMT_BOUND_COUNT, 0)),
+            fromString(String.format(FMT_BOUND_COUNT, 0)),
             PutOption.newBuilder()
                 .withLeaseId(envoyLeaseId)
                 .build()
         ),
         kv.put(
             buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId),
-            ByteSequence.fromString(envoyId),
+            fromString(envoyId),
             PutOption.DEFAULT
         )
     );
@@ -127,16 +129,16 @@ public class ZoneStorage {
 
           if (getResponse.getKvs().isEmpty()) {
             throw new EtcdStorageException(
-                String.format("Active zone key not present: %s", key.toStringUtf8()));
+                String.format("Active zone key not present: %s", key.toString(StandardCharsets.UTF_8)));
           }
 
           final KeyValue kvEntry = getResponse.getKvs().get(0);
-          final int prevCount = Integer.parseInt(kvEntry.getValue().toStringUtf8(), 10);
+          final int prevCount = Integer.parseInt(kvEntry.getValue().toString(StandardCharsets.UTF_8), 10);
           final int newCount = constrainNewCount(prevCount + amount, zone, resourceId);
 
           log.debug("Putting new bound count={} for resource={} in zone={}", newCount, resourceId, zone);
 
-          final ByteSequence newValue = ByteSequence.fromString(String.format(
+          final ByteSequence newValue = fromString(String.format(
               FMT_BOUND_COUNT,
               newCount
           ));
@@ -209,7 +211,7 @@ public class ZoneStorage {
           if (getResponse.getKvs().isEmpty()) {
             return null;
           } else {
-            final String envoyKeyInZone = getResponse.getKvs().get(0).getKey().toStringUtf8();
+            final String envoyKeyInZone = getResponse.getKvs().get(0).getKey().toString(StandardCharsets.UTF_8);
             return envoyKeyInZone.substring(envoyKeyInZone.lastIndexOf("/") + 1);
           }
         })
@@ -266,8 +268,8 @@ public class ZoneStorage {
       final Map<EnvoyResourcePair, Integer> bindingCounts = new HashMap<>();
 
       for (KeyValue kv : getResponse.getKvs()) {
-        final String key = kv.getKey().toStringUtf8();
-        final int count = Integer.parseInt(kv.getValue().toStringUtf8(), 10);
+        final String key = kv.getKey().toString(StandardCharsets.UTF_8);
+        final int count = Integer.parseInt(kv.getValue().toString(StandardCharsets.UTF_8), 10);
         final String resourceId = key.substring(key.lastIndexOf("/") + 1);
 
         try {
@@ -316,9 +318,9 @@ public class ZoneStorage {
       final Map<String, String> envoyResourceMap = new HashMap<>();
 
       for (KeyValue kv : getResponse.getKvs()) {
-        final String key = kv.getKey().toStringUtf8();
+        final String key = kv.getKey().toString(StandardCharsets.UTF_8);
         final String resourceId = key.substring(key.lastIndexOf("/") + 1);
-        final String envoyId = kv.getValue().toStringUtf8();
+        final String envoyId = kv.getValue().toString(StandardCharsets.UTF_8);
 
         envoyResourceMap.put(envoyId, resourceId);
       }
@@ -338,7 +340,7 @@ public class ZoneStorage {
    */
   public CompletableFuture<Long> getRevisionOfKey(String key) {
 
-    final ByteSequence trackingKey = ByteSequence.fromString(key);
+    final ByteSequence trackingKey = fromString(key);
 
     return etcd.getKVClient().txn()
         .If(
@@ -353,7 +355,7 @@ public class ZoneStorage {
             // ...otherwise, create the tracking key since we need to bootstrap the tracking key
             // on very first startup. In production, this is a one-time event, but also enables
             // seamless development testing.
-            Op.put(trackingKey, ByteSequence.fromString(""), PutOption.DEFAULT)
+            Op.put(trackingKey, fromString(""), PutOption.DEFAULT)
         )
         .commit()
         .thenApply(txnResponse -> {
@@ -373,7 +375,7 @@ public class ZoneStorage {
             etcd.getKVClient().put(
               buildKey(FMT_ZONE_EXPIRING, zone.getTenantForKey(), zone.getZoneNameForKey(),
                   resourceId),
-              ByteSequence.fromString(envoyId),
+              fromString(envoyId),
               PutOption.newBuilder()
                   .withLeaseId(leaseId)
                   .build()));
@@ -394,7 +396,7 @@ public class ZoneStorage {
         buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId)
     ).thenApply(getResponse -> {
       if (getResponse.getCount() > 0) {
-        return Optional.of(getResponse.getKvs().get(0).getValue().toStringUtf8());
+        return Optional.of(getResponse.getKvs().get(0).getValue().toString(StandardCharsets.UTF_8));
       } else {
         return Optional.empty();
       }
@@ -407,7 +409,7 @@ public class ZoneStorage {
    * @return True if the lease is no longer active, otherwise false.
    */
   public boolean isLeaseExpired(WatchEvent event) {
-    log.debug("Checking for expired lease. type={} value={}", event.getEventType(), event.getPrevKV().getValue().toStringUtf8());
+    log.debug("Checking for expired lease. type={} value={}", event.getEventType(), event.getPrevKV().getValue().toString(StandardCharsets.UTF_8));
     long leaseId = event.getPrevKV().getLease();
     long remainingTtl = etcd.getLeaseClient().timeToLive(leaseId, LeaseOption.DEFAULT)
         .thenApply(LeaseTimeToLiveResponse::getTTl).join();
@@ -420,7 +422,7 @@ public class ZoneStorage {
    * @param key The tracking key to act on.
    */
   public void incrementTrackingKeyVersion(ByteSequence key) {
-    etcd.getKVClient().put(key, ByteSequence.fromString(""));
+    etcd.getKVClient().put(key, fromString(""));
   }
 
   public boolean isRunning() {

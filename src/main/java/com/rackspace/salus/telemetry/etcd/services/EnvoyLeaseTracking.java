@@ -20,9 +20,9 @@ package com.rackspace.salus.telemetry.etcd.services;
 
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 
-import com.coreos.jetcd.Client;
 import com.rackspace.salus.telemetry.etcd.EtcdProperties;
 import com.rackspace.salus.telemetry.etcd.types.Keys;
+import io.etcd.jetcd.Client;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;

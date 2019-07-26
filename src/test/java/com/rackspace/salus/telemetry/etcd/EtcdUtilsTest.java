@@ -23,8 +23,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import com.coreos.jetcd.data.ByteSequence;
 import com.rackspace.salus.telemetry.model.AgentType;
+import io.etcd.jetcd.ByteSequence;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -39,14 +40,15 @@ public class EtcdUtilsTest {
             "t1", AgentType.FILEBEAT, "ais1"
         );
 
-        assertEquals("/tenants/t1/agentInstallSelectors/FILEBEAT/ais1", result.toStringUtf8());
+        assertEquals("/tenants/t1/agentInstallSelectors/FILEBEAT/ais1", result.toString(
+            StandardCharsets.UTF_8));
     }
 
     @Test
     public void buildKey_noVars() {
         final ByteSequence result = EtcdUtils.buildKey("/agentInstalls");
 
-        assertEquals("/agentInstalls", result.toStringUtf8());
+        assertEquals("/agentInstalls", result.toString(StandardCharsets.UTF_8));
     }
 
     @Test(expected = IllegalArgumentException.class)
