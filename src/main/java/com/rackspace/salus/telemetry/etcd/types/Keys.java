@@ -23,22 +23,7 @@ import java.util.regex.Pattern;
 
 public class Keys {
 
-    public static final String DELIMITER = "/";
-
     public static final String FMT_ENVOYS_BY_ID = "/tenants/{tenant}/envoysById/{envoyInstanceId}";
-    public static final String FMT_AGENT_INSTALLS = "/agentInstalls/{tenant}/{envoyInstanceId}/{agentType}";
-    public static final Pattern PTN_AGENT_INSTALLS = Pattern.compile("/agentInstalls/(.+?)/(.+?)/(.+?)");
-    public static final String FMT_AGENT_INSTALL_SELECTORS_PREFIX = "/tenants/{tenant}/agentInstallSelectors/";
-    public static final String FMT_AGENT_INSTALL_SELECTORS = "/tenants/{tenant}/agentInstallSelectors/{agentType}/{agentInstallSelectorId}";
-    public static final Pattern PTN_AGENT_INSTALL_SELECTORS = Pattern.compile(
-        "/tenants/(?<tenant>.+?)/agentInstallSelectors/(?<agentType>.+?)/(?<agentInstallSelectorId>.+?)"
-    );
-    public static final String FMT_ENVOYS_BY_LABEL = "/tenants/{tenant}/envoysByLabel/{name}:{value}/{envoyInstanceId}";
-
-    public static final String FMT_AGENTS_BY_TYPE = "/agentsByType/{agentType}/{version}/{agentId}";
-    public static final String FMT_AGENTS_BY_ID = "/agentsById/{agentId}";
-
-    public static final String FMT_ENVOYS_BY_AGENT = "/tenants/{tenant}/envoysByAgent/{agentType}/{envoyInstanceId}";
     public static final String FMT_IDENTIFIERS = "/tenants/{tenant}/identifiers/{resourceId}";
     public static final String FMT_RESOURCES_ACTIVE = "/resources/active/{md5OfTenantAndIdentifierValue}";
     public static final String FMT_WORKALLOC_REGISTRY = "/workAllocations/{realm}/registry/{partitionId}";
