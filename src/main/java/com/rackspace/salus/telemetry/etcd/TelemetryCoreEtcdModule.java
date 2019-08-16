@@ -21,6 +21,7 @@ import com.rackspace.salus.telemetry.etcd.services.EtcdHealthIndicator;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.ClientBuilder;
 import io.grpc.netty.GrpcSslContexts;
+import io.netty.handler.ssl.SslContextBuilder;
 import java.io.File;
 import javax.net.ssl.SSLException;
 import lombok.extern.slf4j.Slf4j;
@@ -53,13 +54,26 @@ public class TelemetryCoreEtcdModule {
       log.debug("Enabling SSL for etcd with CA cert at {}", properties.getCaCert());
       final File caFile = new File(properties.getCaCert());
       try {
-        builder.sslContext(GrpcSslContexts.forClient()
-            .trustManager(caFile)
-            .build()
-        );
+        final SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient()
+            .trustManager(caFile);
+
+        if (properties.getKey() != null) {
+          sslContextBuilder.
+              keyManager(
+                  properties.getKeyCertChain() != null ? new File(properties.getKeyCertChain())
+                      : null,
+                  new File(properties.getKey()),
+                  properties.getKeyPassword()
+              );
+        }
+
+        builder.sslContext(sslContextBuilder.build());
       } catch (SSLException e) {
         throw new IllegalStateException(
-            String.format("Failed to setup SSL context for etcd given CA cert at %s", properties.getCaCert()), e);
+            String.format(
+                "Failed to setup SSL context for etcd given CA cert at %s",
+                properties.getCaCert()
+            ), e);
       }
     }
 

@@ -30,5 +30,23 @@ public class EtcdProperties {
      */
     String caCert;
 
+    /**
+     * If set, refers to a PEM file that contains the key material to enable mutual authentication
+     * with the etcd server.
+     */
+    String key;
+
+    /**
+     * If <code>key</code> is set, this can optionally be set to the path of a PEM file that contains
+     * the client certificate chain.
+     */
+    String keyCertChain;
+
+    /**
+     * If <code>key</code> is set, this can optionally be set if the key PEM is encrypted by a
+     * password.
+     */
+    String keyPassword;
+
     long envoyLeaseSec = 30;
 }
