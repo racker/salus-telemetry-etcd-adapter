@@ -19,6 +19,12 @@ package com.rackspace.salus.telemetry.etcd;
 import com.rackspace.salus.common.util.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.services.EtcdHealthIndicator;
 import io.etcd.jetcd.Client;
+import io.etcd.jetcd.ClientBuilder;
+import io.grpc.netty.GrpcSslContexts;
+import io.netty.handler.ssl.SslContextBuilder;
+import java.io.File;
+import javax.net.ssl.SSLException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -28,22 +34,54 @@ import org.springframework.context.annotation.Import;
 @SpringBootConfiguration
 @ComponentScan
 @Import(KeyHashing.class)
+@Slf4j
 public class TelemetryCoreEtcdModule {
 
-    private final EtcdProperties properties;
+  private final EtcdProperties properties;
 
-    @Autowired
-    public TelemetryCoreEtcdModule(EtcdProperties etcdProperties) {
-        this.properties = etcdProperties;
+  @Autowired
+  public TelemetryCoreEtcdModule(EtcdProperties etcdProperties) {
+    this.properties = etcdProperties;
+  }
+
+  @Bean
+  public Client etcdClient() {
+    log.debug("Configuring etcd connectivity to {}", properties.getUrl());
+    final ClientBuilder builder = Client.builder()
+        .endpoints(properties.getUrl());
+
+    if (properties.getCaCert() != null) {
+      log.debug("Enabling SSL for etcd with CA cert at {}", properties.getCaCert());
+      final File caFile = new File(properties.getCaCert());
+      try {
+        final SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient()
+            .trustManager(caFile);
+
+        if (properties.getKey() != null) {
+          sslContextBuilder.
+              keyManager(
+                  properties.getKeyCertChain() != null ? new File(properties.getKeyCertChain())
+                      : null,
+                  new File(properties.getKey()),
+                  properties.getKeyPassword()
+              );
+        }
+
+        builder.sslContext(sslContextBuilder.build());
+      } catch (SSLException e) {
+        throw new IllegalStateException(
+            String.format(
+                "Failed to setup SSL context for etcd given CA cert at %s",
+                properties.getCaCert()
+            ), e);
+      }
     }
 
-    @Bean
-    public Client etcdClient() {
-        return Client.builder().endpoints(properties.getUrl()).build();
-    }
+    return builder.build();
+  }
 
-    @Bean
-    public EtcdHealthIndicator etcdHealthIndicator() {
-        return new EtcdHealthIndicator(etcdClient());
-    }
+  @Bean
+  public EtcdHealthIndicator etcdHealthIndicator() {
+    return new EtcdHealthIndicator(etcdClient());
+  }
 }
