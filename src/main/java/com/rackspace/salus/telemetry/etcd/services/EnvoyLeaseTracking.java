@@ -1,27 +1,22 @@
 /*
- *    Copyright 2018 Rackspace US, Inc.
+ * Copyright 2019 Rackspace US, Inc.
  *
- *    Licensed under the Apache License, Version 2.0 (the "License");
- *    you may not use this file except in compliance with the License.
- *    You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *        http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *    Unless required by applicable law or agreed to in writing, software
- *    distributed under the License is distributed on an "AS IS" BASIS,
- *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *    See the License for the specific language governing permissions and
- *    limitations under the License.
- *
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package com.rackspace.salus.telemetry.etcd.services;
 
-import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
-
 import com.rackspace.salus.telemetry.etcd.EtcdProperties;
-import com.rackspace.salus.telemetry.etcd.types.Keys;
 import io.etcd.jetcd.Client;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -81,24 +76,6 @@ public class EnvoyLeaseTracking {
         else {
             log.warn("Did not have lease for envoyInstanceId={}", envoyInstanceId);
         }
-    }
-
-    public CompletableFuture<Long> retrieve(String tenantId, String envoyInstanceId) {
-        // NOTE: don't cache the resulting lease ID since this call might be used outside of the ambassador in which
-        // case the lifespan of the envoyLeases map is not managed.
-        return etcd.getKVClient().get(
-                buildKey(Keys.FMT_ENVOYS_BY_ID,
-                        tenantId, envoyInstanceId)
-        )
-                .thenApply(getResponse -> {
-                    if (getResponse.getCount() == 0) {
-                        log.warn("Unable to locate tenant={} envoyInstance={} in order to find lease",
-                                tenantId, envoyInstanceId);
-                        return 0L;
-                    } else {
-                        return getResponse.getKvs().get(0).getLease();
-                    }
-                });
     }
 
 }
