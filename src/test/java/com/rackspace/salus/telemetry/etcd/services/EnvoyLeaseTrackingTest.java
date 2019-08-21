@@ -22,13 +22,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.rackspace.salus.telemetry.etcd.EtcdProperties;
-import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.KV;
 import io.etcd.jetcd.Lease;
-import io.etcd.jetcd.api.KeyValue;
-import io.etcd.jetcd.api.RangeResponse;
-import io.etcd.jetcd.kv.GetResponse;
 import io.etcd.jetcd.lease.LeaseGrantResponse;
 import io.etcd.jetcd.lease.LeaseKeepAliveResponse;
 import io.etcd.jetcd.lease.LeaseRevokeResponse;
@@ -80,24 +76,6 @@ public class EnvoyLeaseTrackingTest {
         when(etcd.getKVClient()).thenReturn(kv);
     }
 
-    @Test
-    public void testRetrieve() {
-        when(kv.get(EtcdUtils.fromString("/tenants/t1/envoysById/e1")))
-            .thenReturn(
-                CompletableFuture.completedFuture(
-                    new GetResponse(RangeResponse.newBuilder()
-                        .setCount(1)
-                        .addKvs(KeyValue.newBuilder()
-                            .setLease(2000)
-                            .build())
-                        .build())
-                )
-            );
-
-        final Long result = envoyLeaseTracking.retrieve("t1", "e1").join();
-
-        assertEquals(Long.valueOf(2000), result);
-    }
     @Test
     public void testLeases() {
         @SuppressWarnings("WrapperTypeMayBePrimitive")
