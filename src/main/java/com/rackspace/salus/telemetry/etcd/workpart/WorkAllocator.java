@@ -65,13 +65,13 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.scheduling.TaskScheduler;
-import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
-@Service
 @Slf4j
+@EnableConfigurationProperties(WorkerProperties.class)
 public class WorkAllocator implements SmartLifecycle {
 
   private static final int EXIT_CODE_ETCD_FAILED = 1;
