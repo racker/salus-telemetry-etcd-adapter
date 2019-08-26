@@ -100,7 +100,7 @@ public class EnvoyResourceManagement {
         }
 
         return etcd.getKVClient().put(
-                buildKey(Keys.FMT_IDENTIFIERS, tenantId, resourceId),
+                buildKey(Keys.FMT_RESOURCE_ACTIVE_BY_RESOURCE_ID, tenantId, resourceId),
             resourceInfoBytes,
             putLeaseOption
         )
@@ -112,7 +112,7 @@ public class EnvoyResourceManagement {
                 })
                 .thenCompose(putResponse ->
                         etcd.getKVClient().put(
-                                buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash), resourceInfoBytes, putLeaseOption)
+                                buildKey(Keys.FMT_RESOURCE_ACTIVE_BY_HASH, resourceKeyHash), resourceInfoBytes, putLeaseOption)
                                 .thenApply(response -> resourceInfo));
     }
 
@@ -123,7 +123,7 @@ public class EnvoyResourceManagement {
     }
 
     public CompletableFuture<ResourceInfo> getOne(String tenantId, String resourceId) {
-        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_IDENTIFIERS, tenantId, resourceId);
+        ByteSequence key = EtcdUtils.buildKey(Keys.FMT_RESOURCE_ACTIVE_BY_RESOURCE_ID, tenantId, resourceId);
         return etcd.getKVClient().get(key)
                 .thenApply(getResponse -> {
                     log.debug("Found {} resources for tenant {} with resourceId {}", getResponse.getKvs().size(), tenantId, resourceId);

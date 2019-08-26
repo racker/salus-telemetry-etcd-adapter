@@ -21,8 +21,8 @@ import java.util.regex.Pattern;
 
 public class Keys {
 
-    public static final String FMT_IDENTIFIERS = "/tenants/{tenant}/identifiers/{resourceId}";
-    public static final String FMT_RESOURCES_ACTIVE = "/resources/active/{md5OfTenantAndIdentifierValue}";
+    public static final String FMT_RESOURCE_ACTIVE_BY_RESOURCE_ID = "/tenants/{tenant}/identifiers/{resourceId}";
+    public static final String FMT_RESOURCE_ACTIVE_BY_HASH = "/resources/active/{md5OfTenantAndIdentifierValue}";
 
     /**
      * Value is count of bound monitors, leading zero padded to 10 digits
