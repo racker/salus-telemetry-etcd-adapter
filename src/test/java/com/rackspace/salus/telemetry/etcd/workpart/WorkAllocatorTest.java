@@ -339,9 +339,6 @@ public class WorkAllocatorTest {
 
   @Test
   public void testBulkReplaceWork_nullForNew() throws InterruptedException, ExecutionException {
-    // rebalance delay needs to be comfortably within the hasActiveWorkItems timeouts used below
-    workerProperties.setRebalanceDelay(Duration.ofMillis(500));
-
     final int workCount = 10;
     final Semaphore starts = new Semaphore(0);
     final Semaphore stops = new Semaphore(0);
@@ -379,9 +376,6 @@ public class WorkAllocatorTest {
 
   @Test
   public void testBulkReplaceWork_emptyForNew() throws InterruptedException, ExecutionException {
-    // rebalance delay needs to be comfortably within the hasActiveWorkItems timeouts used below
-    workerProperties.setRebalanceDelay(Duration.ofMillis(500));
-
     final int workCount = 10;
     final Semaphore starts = new Semaphore(0);
     final Semaphore stops = new Semaphore(0);
