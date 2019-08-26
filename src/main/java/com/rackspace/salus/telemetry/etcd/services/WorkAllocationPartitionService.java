@@ -1,100 +1,84 @@
-package com.rackspace.salus.telemetry.etcd.services;
+/*
+ * Copyright 2019 Rackspace US, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
+package com.rackspace.salus.telemetry.etcd.services;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.common.util.KeyHashing;
 import com.rackspace.salus.telemetry.etcd.types.KeyRange;
-import com.rackspace.salus.telemetry.etcd.types.Keys;
-import com.rackspace.salus.telemetry.etcd.types.WorkAllocationRealm;
-import io.etcd.jetcd.ByteSequence;
-import io.etcd.jetcd.Client;
-import io.etcd.jetcd.kv.TxnResponse;
-import io.etcd.jetcd.op.Op;
-import io.etcd.jetcd.options.DeleteOption;
-import io.etcd.jetcd.options.GetOption;
-import io.etcd.jetcd.options.GetOption.SortOrder;
-import io.etcd.jetcd.options.GetOption.SortTarget;
-import io.etcd.jetcd.options.PutOption;
+import com.rackspace.salus.telemetry.etcd.workpart.WorkAllocator;
 import java.io.IOException;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
-@Service
 @Slf4j
 public class WorkAllocationPartitionService {
 
-  private final Client etcd;
+  private final WorkAllocator workAllocator;
   private final KeyHashing keyHashing;
   private final ObjectMapper objectMapper;
-  private final IdGenerator idGenerator;
 
   @Autowired
-  public WorkAllocationPartitionService(Client etcd, KeyHashing keyHashing,
-      ObjectMapper objectMapper, IdGenerator idGenerator) {
-    this.etcd = etcd;
+  public WorkAllocationPartitionService(WorkAllocator workAllocator, KeyHashing keyHashing,
+                                        ObjectMapper objectMapper) {
+    this.workAllocator = workAllocator;
     this.keyHashing = keyHashing;
     this.objectMapper = objectMapper;
-    this.idGenerator = idGenerator;
   }
 
-  public CompletableFuture<Boolean> changePartitions(WorkAllocationRealm realm, int count) {
+  public CompletableFuture<Boolean> changePartitions(int count) {
     Assert.isTrue(count > 0, "partition count must be greater than zero");
 
-    final ByteSequence prefix = buildKey(Keys.FMT_WORKALLOC_REGISTRY, realm, "");
+    try {
+      final List<String> workContents = createPartitions(count);
 
-    return etcd.getKVClient()
-        .delete(
-            prefix,
-            DeleteOption.newBuilder()
-                .withPrefix(prefix)
-                .build()
-        )
-        .thenCompose(deleteResponse -> createPartitions(realm, count));
+      return workAllocator.bulkReplaceWork(workContents);
+
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException("Unable to encode work partition content", e);
+    }
   }
 
-  public CompletableFuture<List<KeyRange>> getPartitions(WorkAllocationRealm realm) {
-    final ByteSequence prefix = buildKey(Keys.FMT_WORKALLOC_REGISTRY, realm, "");
-
-    return etcd.getKVClient()
-        .get(
-            prefix,
-            GetOption.newBuilder()
-                .withPrefix(prefix)
-                // the keys are UUIDs, but at least sorting will force consistent results when
-                // using this operation
-                .withSortField(SortTarget.KEY)
-                .withSortOrder(SortOrder.ASCEND)
-                .build()
-        )
-        .thenApply(getResponse ->
-            getResponse.getKvs().stream()
-                .map(keyValue -> {
+  public CompletableFuture<List<KeyRange>> getPartitions() {
+    return workAllocator.getWorkRegistry()
+        .thenApply(workEntries ->
+            workEntries.stream()
+                .map(work -> {
                   try {
-                    return objectMapper
-                        .readValue(keyValue.getValue().getBytes(), KeyRange.class);
+                    return objectMapper.readValue(work.getContent(), KeyRange.class);
                   } catch (IOException e) {
-                    log.warn("Failed to deserialize keyValue={} for realm={}",
-                        keyValue.getKey().toString(StandardCharsets.UTF_8), realm, e
+                    log.warn(
+                        "Unable to parse work partition key range from content={}",
+                        work.getContent(), e
                     );
-                    return null;
+                    throw new IllegalStateException("Unable parse work partition key range", e);
                   }
                 })
-                .filter(Objects::nonNull)
                 .collect(Collectors.toList()));
   }
 
-  private CompletionStage<Boolean> createPartitions(WorkAllocationRealm realm, int count) {
+  private List<String> createPartitions(int count)
+      throws JsonProcessingException {
     final int bits = keyHashing.bits();
     final BigInteger outerValue = BigInteger.ZERO
         .setBit(bits);
@@ -109,8 +93,9 @@ public class WorkAllocationPartitionService {
           ));
     }
 
+    final List<String> workContents = new ArrayList<>(count);
+
     BigInteger rangeStart = BigInteger.ZERO;
-    final Op[] putOps = new Op[count];
     for (int i = 0; i < count; i++) {
       final BigInteger next = rangeStart.add(partitionChunk[0]);
 
@@ -118,25 +103,14 @@ public class WorkAllocationPartitionService {
           .setStart(format(rangeStart, bits))
           .setEnd(format(next.subtract(BigInteger.ONE), bits));
 
-      final ByteSequence key = buildKey(
-          Keys.FMT_WORKALLOC_REGISTRY, realm, idGenerator.generate());
-      final ByteSequence value;
-      try {
-        value = ByteSequence
-            .from(objectMapper.writeValueAsBytes(keyRange));
-      } catch (JsonProcessingException e) {
-        log.error("Failed to serialize keyRange={}", keyRange, e);
-        return CompletableFuture.completedFuture(false);
-      }
-
-      putOps[i] = Op.put(key, value, PutOption.DEFAULT);
+      workContents.add(
+          objectMapper.writeValueAsString(keyRange)
+      );
 
       rangeStart = next;
     }
 
-    return etcd.getKVClient().txn().Then(putOps)
-        .commit()
-        .thenApply(TxnResponse::isSucceeded);
+    return workContents;
   }
 
   /**

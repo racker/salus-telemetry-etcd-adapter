@@ -1,27 +1,38 @@
+/*
+ * Copyright 2019 Rackspace US, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.rackspace.salus.telemetry.etcd.services;
 
-import static org.hamcrest.Matchers.hasSize;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.common.util.KeyHashing;
-import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.types.KeyRange;
-import com.rackspace.salus.telemetry.etcd.types.Keys;
-import com.rackspace.salus.telemetry.etcd.types.WorkAllocationRealm;
-import io.etcd.jetcd.ByteSequence;
-import io.etcd.jetcd.Client;
-import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
-import java.io.IOException;
+import com.rackspace.salus.telemetry.etcd.workpart.WorkAllocator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -30,91 +41,57 @@ import org.mockito.junit.MockitoJUnitRunner;
 @RunWith(MockitoJUnitRunner.class)
 public class WorkAllocationPartitionServiceTest {
 
-  @Rule
-  public final EtcdClusterResource etcd = new EtcdClusterResource("WorkAllocationPartitionServiceTest", 1);
-
   @Mock
-  IdGenerator idGenerator;
+  WorkAllocator workAllocator;
 
-  ObjectMapper objectMapper = new ObjectMapper();
+  private ObjectMapper objectMapper = new ObjectMapper();
 
-  WorkAllocationPartitionService service;
-
-  Client client;
+  private WorkAllocationPartitionService service;
 
   @Before
-  public void setUp() throws Exception {
-    client = io.etcd.jetcd.Client.builder().endpoints(
-        etcd.cluster().getClientEndpoints()
-    ).build();
-
-    service = new WorkAllocationPartitionService(
-        client, new KeyHashing(), objectMapper, idGenerator);
+  public void setUp() {
+    service = new WorkAllocationPartitionService(workAllocator,
+        new KeyHashing(), objectMapper
+    );
   }
 
-  @After
-  public void tearDown() throws Exception {
-    client.close();
+  private String encodeKeyRange(String start, String end) throws JsonProcessingException {
+    return objectMapper.writeValueAsString(new KeyRange().setStart(start).setEnd(end));
   }
 
   @Test
-  public void testChangePartitions() throws ExecutionException, InterruptedException {
+  public void testChangePartitions()
+      throws ExecutionException, InterruptedException, JsonProcessingException {
 
-    final AtomicInteger id = new AtomicInteger(1);
-    when(idGenerator.generate())
-        .then(invocationOnMock -> Integer.toString(id.getAndIncrement()));
+    when(workAllocator.bulkReplaceWork(any()))
+        .thenReturn(CompletableFuture.completedFuture(true));
 
-    final Boolean result = service.changePartitions(WorkAllocationRealm.PRESENCE_MONITOR, 2)
+    final Boolean result = service.changePartitions(2)
         .get();
 
     assertTrue(result);
 
-    assertRangeAt(
-        "0000000000000000000000000000000000000000000000000000000000000000",
-        "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-        "1");
-    assertRangeAt(
-        "8000000000000000000000000000000000000000000000000000000000000000",
-        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-        "2");
-
-    final List<KeyRange> ranges = service.getPartitions(WorkAllocationRealm.PRESENCE_MONITOR)
-        .get();
-
-    assertThat(ranges, hasSize(2));
-    assertEquals(
-        new KeyRange()
-        .setStart("0000000000000000000000000000000000000000000000000000000000000000")
-        .setEnd("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-        ranges.get(0)
+    List<String> expectedWorkContents = List.of(
+        encodeKeyRange(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        ),
+        encodeKeyRange(
+            "8000000000000000000000000000000000000000000000000000000000000000",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        )
     );
-    assertEquals(
-        new KeyRange()
-        .setStart("8000000000000000000000000000000000000000000000000000000000000000")
-        .setEnd("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-        ranges.get(1)
-    );
+    verify(workAllocator).bulkReplaceWork(expectedWorkContents);
   }
 
-  private void assertRangeAt(String expectedStart, String expectedEnd, String id)
-      throws ExecutionException, InterruptedException {
-    final ByteSequence key = EtcdUtils
-        .buildKey(Keys.FMT_WORKALLOC_REGISTRY, WorkAllocationRealm.PRESENCE_MONITOR, id);
+  @Test
+  public void testChangePartitions_invalidCount() {
 
-    final KeyRange keyRange = client.getKVClient()
-        .get(key)
-        .thenApply(getResponse -> {
-          assertThat(getResponse.getKvs(), hasSize(1));
+    assertThatThrownBy(() -> service.changePartitions(3)
+        .get())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Hashing bit size 256 was not divisible into 3 partitions");
 
-          try {
-            return objectMapper
-                .readValue(getResponse.getKvs().get(0).getValue().getBytes(), KeyRange.class);
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
-        }).get();
-
-    assertEquals(expectedStart, keyRange.getStart());
-    assertEquals(expectedEnd, keyRange.getEnd());
+    verify(workAllocator, never()).bulkReplaceWork(anyList());
   }
 }
