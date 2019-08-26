@@ -1,19 +1,17 @@
 /*
- *    Copyright 2018 Rackspace US, Inc.
+ * Copyright 2019 Rackspace US, Inc.
  *
- *    Licensed under the Apache License, Version 2.0 (the "License");
- *    you may not use this file except in compliance with the License.
- *    You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *        http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *    Unless required by applicable law or agreed to in writing, software
- *    distributed under the License is distributed on an "AS IS" BASIS,
- *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *    See the License for the specific language governing permissions and
- *    limitations under the License.
- *
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package com.rackspace.salus.telemetry.etcd.services;
@@ -102,7 +100,10 @@ public class EnvoyResourceManagement {
         }
 
         return etcd.getKVClient().put(
-                buildKey(Keys.FMT_IDENTIFIERS, tenantId, resourceId), resourceInfoBytes)
+                buildKey(Keys.FMT_IDENTIFIERS, tenantId, resourceId),
+            resourceInfoBytes,
+            putLeaseOption
+        )
                 .thenApply(putResponse -> {
                     if (envoyId == null) {
                         return resourceInfo;
@@ -119,29 +120,6 @@ public class EnvoyResourceManagement {
         resource.setTenantId(tenantId);
         return registerResource(tenantId,null, 0L, resource.getResourceId(),
                                 resource.getLabels(), null);
-    }
-
-    /**
-     * Removes all known keys for an envoy from etcd.
-     *
-     * @param tenantId The tenant used to authenticate the the envoy.
-     * @param resourceId The identifier of the resource where the Envoy is running.
-     * @return The results of an etcd DELETE.
-     */
-    public CompletableFuture<?> delete(String tenantId, String resourceId) {
-        String resourceKey = String.format("%s:%s", tenantId, resourceId);
-        final String resourceKeyHash = hashing.hash(resourceKey);
-        return etcd.getKVClient().delete(
-                buildKey(Keys.FMT_RESOURCES_ACTIVE, resourceKeyHash))
-                .thenCompose(delResponse ->
-                        etcd.getKVClient().delete(
-                                buildKey(Keys.FMT_IDENTIFIERS, tenantId, resourceId))
-                .thenApply(deleteResponse -> {
-                    if (deleteResponse.getDeleted() == 0) {
-                        return null;
-                    }
-                    return deleteResponse;
-                }));
     }
 
     public CompletableFuture<ResourceInfo> getOne(String tenantId, String resourceId) {
