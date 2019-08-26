@@ -37,6 +37,8 @@ import io.etcd.jetcd.op.CmpTarget;
 import io.etcd.jetcd.op.Op;
 import io.etcd.jetcd.options.DeleteOption;
 import io.etcd.jetcd.options.GetOption;
+import io.etcd.jetcd.options.GetOption.SortOrder;
+import io.etcd.jetcd.options.GetOption.SortTarget;
 import io.etcd.jetcd.options.PutOption;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -254,9 +256,6 @@ public class WorkAllocatorTest {
 
   @Test
   public void testBulkReplaceWork() throws InterruptedException, ExecutionException {
-    // rebalance delay needs to be comfortably within the hasActiveWorkItems timeouts used below
-    workerProperties.setRebalanceDelay(Duration.ofMillis(500));
-
     final int initialWorkCount = 15;
     final int newWorkCount = 10;
     final Semaphore initialStarts = new Semaphore(0);
@@ -292,24 +291,50 @@ public class WorkAllocatorTest {
     workAllocator1.start();
     workAllocator2.start();
 
+    final List<String> initialWorkContent = IntStream.range(0, initialWorkCount)
+        .mapToObj(i -> String.format("initial-%02d", i))
+        .collect(Collectors.toList());
     final CompletableFuture<Boolean> bulkResult = workAllocator1.bulkReplaceWork(
-        IntStream.range(0, initialWorkCount)
-            .mapToObj(i -> "initial-"+Integer.toString(i))
-            .collect(Collectors.toList())
+        initialWorkContent
     );
     assertTrue(bulkResult.get());
 
     assertTrue(initialStarts.tryAcquire(initialWorkCount, TIMEOUT, TimeUnit.MILLISECONDS));
 
+    assertWorkContent(initialWorkContent);
+
+    final List<String> newWorkContent = IntStream.range(0, newWorkCount)
+        .mapToObj(i -> "new-" + Integer.toString(i))
+        .collect(Collectors.toList());
     final CompletableFuture<Boolean> bulkReplaceResult = workAllocator2.bulkReplaceWork(
-        IntStream.range(0, newWorkCount)
-            .mapToObj(i -> "new-" + Integer.toString(i))
-            .collect(Collectors.toList())
+        newWorkContent
     );
     assertTrue(bulkReplaceResult.get());
 
     assertTrue(newStarts.tryAcquire(newWorkCount, TIMEOUT, TimeUnit.MILLISECONDS));
     assertTrue(stops.tryAcquire(initialWorkCount, TIMEOUT, TimeUnit.MILLISECONDS));
+
+    assertWorkContent(newWorkContent);
+  }
+
+  private void assertWorkContent(List<String> workContent)
+      throws ExecutionException, InterruptedException {
+    final ByteSequence prefix = fromString(workerProperties.getPrefix() + Bits.REGISTRY_SET);
+
+    final GetResponse response = client.getKVClient()
+        .get(prefix,
+            GetOption.newBuilder()
+                .withPrefix(prefix)
+                .withSortField(SortTarget.VALUE)
+                .withSortOrder(SortOrder.ASCEND)
+                .build())
+        .get();
+
+    final List<String> actual = response.getKvs().stream()
+        .map(keyValue -> keyValue.getValue().toString(StandardCharsets.UTF_8))
+        .collect(Collectors.toList());
+
+    assertEquals(workContent, actual);
   }
 
   @Test
