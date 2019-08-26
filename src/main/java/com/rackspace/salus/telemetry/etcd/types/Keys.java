@@ -23,7 +23,6 @@ public class Keys {
 
     public static final String FMT_IDENTIFIERS = "/tenants/{tenant}/identifiers/{resourceId}";
     public static final String FMT_RESOURCES_ACTIVE = "/resources/active/{md5OfTenantAndIdentifierValue}";
-    public static final String FMT_WORKALLOC_REGISTRY = "/workAllocations/{realm}/registry/{partitionId}";
 
     /**
      * Value is count of bound monitors, leading zero padded to 10 digits
