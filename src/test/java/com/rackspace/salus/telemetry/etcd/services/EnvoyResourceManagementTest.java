@@ -118,7 +118,7 @@ public class EnvoyResourceManagementTest {
         verifyResourceInfo("/resources/active/" + resourceKeyHash, resourceInfo, leaseId);
         verifyResourceInfo(identifierPath, resourceInfo, null);
 
-        client.getLeaseClient().revoke(leaseId);
+        client.getLeaseClient().revoke(leaseId).join();
 
         verifyDelete("/resources/active/" + resourceKeyHash);
         verifyDelete(identifierPath);
