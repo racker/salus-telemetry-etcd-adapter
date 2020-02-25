@@ -84,7 +84,7 @@ public class EtcdUtils {
         }
         matcher.appendTail(sb);
 
-        return fromString(sb.toString());
+        return fromString(sb.toString().toLowerCase());
     }
 
     /**

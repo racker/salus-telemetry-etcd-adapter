@@ -17,6 +17,7 @@
 package com.rackspace.salus.telemetry.etcd.services;
 
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.fromString;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING;
 import static com.rackspace.salus.telemetry.etcd.types.ResolvedZone.createPrivateZone;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.Matchers.equalTo;
@@ -29,6 +30,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
 import io.etcd.jetcd.Client;
@@ -277,9 +279,8 @@ public class ZoneStorageTest {
     PutResponse response = zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout).get();
 
     assertFalse(response.hasPrevKv());
-
     final GetResponse expiringResponse = client.getKVClient()
-        .get(fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
+        .get(EtcdUtils.buildKey(FMT_ZONE_EXPIRING, "t-1", zone.getName(), resourceId))
         .join();
     assertThat(expiringResponse.getKvs(), hasSize(1));
 
@@ -303,8 +304,9 @@ public class ZoneStorageTest {
 
     zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout).join();
 
+    ;
     GetResponse expiringResponse = client.getKVClient()
-        .get(fromString(String.format("/zones/expiring/t-1/%s/%s", zone.getName(), resourceId)))
+        .get(EtcdUtils.buildKey(FMT_ZONE_EXPIRING, "t-1", zone.getName(), resourceId))
         .join();
     assertThat(expiringResponse.getKvs(), hasSize(1));
 
