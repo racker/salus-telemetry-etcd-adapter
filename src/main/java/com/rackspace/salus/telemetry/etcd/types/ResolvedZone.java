@@ -41,12 +41,24 @@ public class ResolvedZone {
 
   private ResolvedZone(String zoneName) {
     this.tenantId = null; // indicates public
-    this.name = zoneName;
+    if(zoneName != null) {
+      this.name = zoneName.toLowerCase();
+    }else {
+      this.name = null;
+    }
   }
 
   private ResolvedZone(String zoneTenantId, String zoneName) {
-    this.tenantId = zoneTenantId;
-    this.name = zoneName;
+    if(zoneTenantId != null) {
+      this.tenantId = zoneTenantId.toLowerCase();
+    }else {
+      this.tenantId = null;
+    }
+    if(zoneName != null) {
+      this.name = zoneName.toLowerCase();
+    }else {
+      this.name = null;
+    }
   }
 
   public static ResolvedZone createPublicZone(String zoneName) {
