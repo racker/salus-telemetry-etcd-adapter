@@ -41,7 +41,7 @@ public class ResolvedZone {
 
   private ResolvedZone(String zoneName) {
     this.tenantId = null; // indicates public
-    this.name = zoneName.toLowerCase();
+    this.name = zoneName;
 
   }
 
@@ -51,7 +51,7 @@ public class ResolvedZone {
     }else {
       this.tenantId = null;
     }
-    this.name = zoneName.toLowerCase();
+    this.name = zoneName;
   }
 
   public static ResolvedZone createPublicZone(String zoneName) {

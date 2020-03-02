@@ -53,7 +53,7 @@ public class ResolvedZoneTest {
   public void getZoneNameForKey() {
     final ResolvedZone zone = createPublicZone("companyName/west");
 
-    assertThat(zone.getZoneNameForKey(), equalTo("companyname%2Fwest"));
+    assertThat(zone.getZoneNameForKey(), equalTo("companyName%2Fwest"));
   }
 
   @Test
