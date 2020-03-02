@@ -42,10 +42,15 @@ public class ResolvedZone {
   private ResolvedZone(String zoneName) {
     this.tenantId = null; // indicates public
     this.name = zoneName;
+
   }
 
   private ResolvedZone(String zoneTenantId, String zoneName) {
-    this.tenantId = zoneTenantId;
+    if(zoneTenantId != null) {
+      this.tenantId = zoneTenantId.toLowerCase();
+    }else {
+      this.tenantId = null;
+    }
     this.name = zoneName;
   }
 
