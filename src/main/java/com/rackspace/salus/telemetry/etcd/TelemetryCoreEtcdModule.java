@@ -51,10 +51,13 @@ public class TelemetryCoreEtcdModule {
   @Bean
   public Client etcdClient() {
     log.debug("Configuring etcd connectivity to {}", properties.getUrl());
+    // Use a modification of java.util.concurrent.Executors.newCachedThreadPool()
+    // that bounds the pool size. The SynchronousQueue ensures there is back pressure
+    // on callers when the pool is fully occupied.
     ExecutorService executorService = new ThreadPoolExecutor(1,
         properties.getMaxExecutorThreads(),
         60L, TimeUnit.SECONDS,
-        new SynchronousQueue<Runnable>());
+        new SynchronousQueue<>());
     final ClientBuilder builder = Client.builder()
         .endpoints(properties.getUrl())
         .executorService(executorService);
