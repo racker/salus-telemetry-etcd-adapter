@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,4 +49,9 @@ public class EtcdProperties {
     String keyPassword;
 
     long envoyLeaseSec = 30;
+
+    /**
+     * Configures the maximum size of the thread pool used for etcd client operations.
+     */
+    int maxExecutorThreads = 4;
 }

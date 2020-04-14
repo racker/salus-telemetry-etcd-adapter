@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,10 @@ import io.etcd.jetcd.ClientBuilder;
 import io.grpc.netty.GrpcSslContexts;
 import io.netty.handler.ssl.SslContextBuilder;
 import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,8 +51,16 @@ public class TelemetryCoreEtcdModule {
   @Bean
   public Client etcdClient() {
     log.debug("Configuring etcd connectivity to {}", properties.getUrl());
+    // Use a modification of java.util.concurrent.Executors.newCachedThreadPool()
+    // that bounds the pool size. The SynchronousQueue ensures there is back pressure
+    // on callers when the pool is fully occupied.
+    ExecutorService executorService = new ThreadPoolExecutor(1,
+        properties.getMaxExecutorThreads(),
+        60L, TimeUnit.SECONDS,
+        new SynchronousQueue<>());
     final ClientBuilder builder = Client.builder()
-        .endpoints(properties.getUrl());
+        .endpoints(properties.getUrl())
+        .executorService(executorService);
 
     if (properties.getCaCert() != null) {
       log.debug("Enabling SSL for etcd with CA cert at {}", properties.getCaCert());
