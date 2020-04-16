@@ -24,9 +24,9 @@ import io.grpc.netty.GrpcSslContexts;
 import io.netty.handler.ssl.SslContextBuilder;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
 import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLException;
 import lombok.extern.slf4j.Slf4j;
@@ -58,10 +58,19 @@ public class TelemetryCoreEtcdModule {
         properties.getMaxExecutorThreads(),
         60L, TimeUnit.SECONDS,
         // effectively disable queuing by using a direct-handoff
-        // NOTE: ThreadPoolExecutor uses the offer method of the queue to determine availability
+        // NOTE: ThreadPoolExecutor uses the non-blocking offer method of the queue to determine availability
         new SynchronousQueue<>(),
-        // ...and apply back-pressure by having rejected executions be called synchronously
-        new CallerRunsPolicy());
+        // ...but handle rejection by using blocking offer call
+        (r, executor) -> {
+          try {
+            if (!executor.getQueue().offer(r, properties.getExecutorOfferTimeoutSec(), TimeUnit.SECONDS)) {
+              throw new RejectedExecutionException("Timed out waiting to offer etcd call");
+            }
+          } catch (InterruptedException e) {
+            throw new RejectedExecutionException(e);
+          }
+        }
+    );
     final ClientBuilder builder = Client.builder()
         .endpoints(properties.getUrl())
         .executorService(executorService);
