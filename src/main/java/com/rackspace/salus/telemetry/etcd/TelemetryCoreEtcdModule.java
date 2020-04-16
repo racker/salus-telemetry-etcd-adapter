@@ -26,6 +26,7 @@ import java.io.File;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
 import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLException;
 import lombok.extern.slf4j.Slf4j;
@@ -52,12 +53,15 @@ public class TelemetryCoreEtcdModule {
   public Client etcdClient() {
     log.debug("Configuring etcd connectivity to {}", properties.getUrl());
     // Use a modification of java.util.concurrent.Executors.newCachedThreadPool()
-    // that bounds the pool size. The SynchronousQueue ensures there is back pressure
-    // on callers when the pool is fully occupied.
+    // that bounds the pool size.
     ExecutorService executorService = new ThreadPoolExecutor(1,
         properties.getMaxExecutorThreads(),
         60L, TimeUnit.SECONDS,
-        new SynchronousQueue<>());
+        // effectively disable queuing by using a direct-handoff
+        // NOTE: ThreadPoolExecutor uses the offer method of the queue to determine availability
+        new SynchronousQueue<>(),
+        // ...and apply back-pressure by having rejected executions be called synchronously
+        new CallerRunsPolicy());
     final ClientBuilder builder = Client.builder()
         .endpoints(properties.getUrl())
         .executorService(executorService);
