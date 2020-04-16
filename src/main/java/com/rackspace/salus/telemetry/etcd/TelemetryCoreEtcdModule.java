@@ -24,6 +24,7 @@ import io.grpc.netty.GrpcSslContexts;
 import io.netty.handler.ssl.SslContextBuilder;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -52,12 +53,24 @@ public class TelemetryCoreEtcdModule {
   public Client etcdClient() {
     log.debug("Configuring etcd connectivity to {}", properties.getUrl());
     // Use a modification of java.util.concurrent.Executors.newCachedThreadPool()
-    // that bounds the pool size. The SynchronousQueue ensures there is back pressure
-    // on callers when the pool is fully occupied.
+    // that bounds the pool size.
     ExecutorService executorService = new ThreadPoolExecutor(1,
         properties.getMaxExecutorThreads(),
         60L, TimeUnit.SECONDS,
-        new SynchronousQueue<>());
+        // effectively disable queuing by using a direct-handoff
+        // NOTE: ThreadPoolExecutor uses the non-blocking offer method of the queue to determine availability
+        new SynchronousQueue<>(),
+        // ...but handle rejection by using blocking offer call
+        (r, executor) -> {
+          try {
+            if (!executor.getQueue().offer(r, properties.getExecutorOfferTimeoutSec(), TimeUnit.SECONDS)) {
+              throw new RejectedExecutionException("Timed out waiting to offer etcd call");
+            }
+          } catch (InterruptedException e) {
+            throw new RejectedExecutionException(e);
+          }
+        }
+    );
     final ClientBuilder builder = Client.builder()
         .endpoints(properties.getUrl())
         .executorService(executorService);

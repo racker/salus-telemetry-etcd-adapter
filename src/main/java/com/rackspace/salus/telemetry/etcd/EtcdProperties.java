@@ -54,4 +54,5 @@ public class EtcdProperties {
      * Configures the maximum size of the thread pool used for etcd client operations.
      */
     int maxExecutorThreads = 4;
+    int executorOfferTimeoutSec = 30;
 }
