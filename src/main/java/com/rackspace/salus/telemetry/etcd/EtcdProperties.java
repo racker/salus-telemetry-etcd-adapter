@@ -54,5 +54,21 @@ public class EtcdProperties {
      * Configures the maximum size of the thread pool used for etcd client operations.
      */
     int maxExecutorThreads = 4;
+
+    public enum RejectedExecutionPolicy {
+        CALLER_RUNS,
+        BLOCKING_TIMEOUT
+    }
+
+    /**
+     * Specifies how attempts to call more than maxExecutorThreads number of concurrent etcd
+     * operations should be handled.
+     */
+    RejectedExecutionPolicy rejectedExecutionPolicy = RejectedExecutionPolicy.BLOCKING_TIMEOUT;
+
+    /**
+     * If rejectedExecutionPolicy is set to BLOCKING_TIMEOUT, this specifies the timeout of those
+     * blocking executor calls.
+     */
     int executorOfferTimeoutSec = 30;
 }
