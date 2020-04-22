@@ -22,14 +22,10 @@ import io.etcd.jetcd.Client;
 import io.etcd.jetcd.ClientBuilder;
 import io.grpc.netty.GrpcSslContexts;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.RejectedExecutionHandler;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executors;
 import javax.net.ssl.SSLException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,37 +86,11 @@ public class TelemetryCoreEtcdModule {
   }
 
   private ExecutorService etcdExecutorService() {
-    // Use a modification of java.util.concurrent.Executors.newCachedThreadPool()
-    // that bounds the pool size.
-    return new ThreadPoolExecutor(1,
-          properties.getMaxExecutorThreads(),
-          60L, TimeUnit.SECONDS,
-          // effectively disable queuing by using a direct-handoff
-          // NOTE: ThreadPoolExecutor uses the non-blocking offer method of the queue to determine availability
-          new SynchronousQueue<>(),
-          rejectedExecutionHandler()
-      );
-  }
-
-  private RejectedExecutionHandler rejectedExecutionHandler() {
-    final RejectedExecutionHandler handler;
-    switch (properties.getRejectedExecutionPolicy()) {
-      case BLOCKING_TIMEOUT:
-        handler = (r, executor) -> {
-          try {
-            if (!executor.getQueue().offer(r, properties.getExecutorOfferTimeoutSec(), TimeUnit.SECONDS)) {
-              throw new RejectedExecutionException("Timed out waiting to offer etcd call");
-            }
-          } catch (InterruptedException e) {
-            throw new RejectedExecutionException(e);
-          }
-        };
-        break;
-      case CALLER_RUNS:
-      default:
-        handler = new CallerRunsPolicy();
-    }
-    return handler;
+    // A queuing executor is needed since the chained, CompletableFuture based
+    // etcd operations can easily exhaust a limited thread pool and cause a deadlock
+    // at the point of executor submission
+    return Executors.newFixedThreadPool(properties.getMaxExecutorThreads(),
+        new DefaultThreadFactory("etcd"));
   }
 
   @Bean
