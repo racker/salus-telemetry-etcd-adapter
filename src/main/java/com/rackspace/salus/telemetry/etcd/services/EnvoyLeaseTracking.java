@@ -72,7 +72,10 @@ public class EnvoyLeaseTracking {
                     .thenAccept(leaseRevokeResponse -> {
                         log.debug("Revoked lease={} for envoy={}", leaseId, envoyInstanceId);
                     })
-                    .join();
+                    .exceptionally(throwable -> {
+                      log.warn("Failed to revoke lease={} for envoy={} message={}", leaseId, envoyInstanceId, throwable.getMessage());
+                      return null;
+                    });
         }
         else {
             log.warn("Did not have lease for envoyInstanceId={}", envoyInstanceId);
