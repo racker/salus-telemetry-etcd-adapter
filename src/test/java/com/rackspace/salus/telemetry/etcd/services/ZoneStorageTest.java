@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,13 +30,14 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.rackspace.salus.telemetry.etcd.EtcdClusterResource;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
+import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.kv.GetResponse;
 import io.etcd.jetcd.kv.PutResponse;
-import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import io.etcd.jetcd.lease.LeaseGrantResponse;
 import io.etcd.jetcd.options.LeaseOption;
 import io.etcd.jetcd.watch.WatchEvent;
@@ -73,7 +74,7 @@ public class ZoneStorageTest {
   @Before
   public void setUp() {
     client = io.etcd.jetcd.Client.builder().endpoints(
-        etcd.cluster().getClientEndpoints()
+        etcd.getClientEndpoints()
     ).build();
 
     zoneStorage = new ZoneStorage(client, envoyLeaseTracking);
@@ -234,7 +235,7 @@ public class ZoneStorageTest {
   public void testIsLeaseExpired_notExpired() {
     long leaseId = grantLease();
     io.etcd.jetcd.api.KeyValue kv = io.etcd.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
-    io.etcd.jetcd.KeyValue kv1 = new io.etcd.jetcd.KeyValue(kv);
+    io.etcd.jetcd.KeyValue kv1 = new io.etcd.jetcd.KeyValue(kv, ByteSequence.EMPTY);
     WatchEvent event = new WatchEvent(null, kv1, EventType.DELETE);
 
     assertFalse(zoneStorage.isLeaseExpired(event));
@@ -244,7 +245,7 @@ public class ZoneStorageTest {
   public void testIsLeaseExpired_revoked() throws Exception {
     long leaseId = grantLease();
     io.etcd.jetcd.api.KeyValue kv = io.etcd.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
-    io.etcd.jetcd.KeyValue kv1 = new io.etcd.jetcd.KeyValue(kv);
+    io.etcd.jetcd.KeyValue kv1 = new io.etcd.jetcd.KeyValue(kv, ByteSequence.EMPTY);
 
     WatchEvent event = new WatchEvent(null, kv1, EventType.DELETE);
     revokeLease(leaseId);
@@ -256,7 +257,7 @@ public class ZoneStorageTest {
   public void testIsLeaseExpired_expired() throws Exception {
     long leaseId = grantLease(0);
     io.etcd.jetcd.api.KeyValue kv = io.etcd.jetcd.api.KeyValue.newBuilder().setLease(leaseId).build();
-    io.etcd.jetcd.KeyValue kv1 = new io.etcd.jetcd.KeyValue(kv);
+    io.etcd.jetcd.KeyValue kv1 = new io.etcd.jetcd.KeyValue(kv, ByteSequence.EMPTY);
     WatchEvent event = new WatchEvent(null, kv1, EventType.DELETE);
 
     // this actually creates a lease of 1s, so we have to wait for it to expire.
