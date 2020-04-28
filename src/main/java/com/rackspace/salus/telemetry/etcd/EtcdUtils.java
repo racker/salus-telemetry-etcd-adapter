@@ -1,39 +1,27 @@
 /*
- *    Copyright 2018 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
- *    Licensed under the Apache License, Version 2.0 (the "License");
- *    you may not use this file except in compliance with the License.
- *    You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *        http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *    Unless required by applicable law or agreed to in writing, software
- *    distributed under the License is distributed on an "AS IS" BASIS,
- *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *    See the License for the specific language governing permissions and
- *    limitations under the License.
- *
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package com.rackspace.salus.telemetry.etcd;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.protobuf.ByteString;
 import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.KeyValue;
-import io.etcd.jetcd.api.DeleteRangeResponse;
-import io.etcd.jetcd.api.RangeResponse;
-import io.etcd.jetcd.kv.DeleteResponse;
-import io.etcd.jetcd.kv.GetResponse;
-import io.etcd.jetcd.kv.PutResponse;
-import io.etcd.jetcd.kv.TxnResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.BinaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -116,95 +104,14 @@ public class EtcdUtils {
         return Pattern.compile(sb.toString());
     }
 
-    public static ByteString buildByteString(String format, Object... values) {
-        return ByteString.copyFromUtf8(
-                String.format(format, values)
-        );
-    }
-
-    public static ByteSequence buildValue(ObjectMapper objectMapper, Object o) throws JsonProcessingException {
-        return ByteSequence.from(
-                objectMapper.writeValueAsBytes(o)
-        );
-    }
-
     public static <T> T parseValue(ObjectMapper objectMapper, KeyValue kv, Class<T> type) throws IOException {
         return objectMapper.readValue(
                 kv.getValue().getBytes(),
                 type);
     }
 
-    /**
-     * Builds an empty and completed PutResponse for use in collection-to-completion-chains
-     * @return completed PutResponse
-     */
-    public static CompletableFuture<PutResponse> completedPutResponse() {
-        return CompletableFuture.completedFuture(
-                new PutResponse(io.etcd.jetcd.api.PutResponse.newBuilder()
-                        .build())
-        );
-    }
-
-    /**
-     * Builds an empty and completed DeleteResponse for use in collection-to-completion-chains
-     * @return completed DeleteResponse
-     */
-    public static CompletableFuture<DeleteResponse> completedDeletedResponse() {
-        return CompletableFuture.completedFuture(new DeleteResponse(
-                DeleteRangeResponse.newBuilder().build()
-        ));
-    }
-
-    public static CompletableFuture<TxnResponse> completedTxnResponse() {
-        return CompletableFuture.completedFuture(new TxnResponse(
-            io.etcd.jetcd.api.TxnResponse.newBuilder().build()
-        ));
-    }
-
-    /**
-     * This is intended to be used in a {@link java.util.stream.Stream#reduce(BinaryOperator)} to take a stream
-     * of {@link CompletableFuture}s, wait for all them to be resolved, and in turn reduce the stream to a single,
-     * pending CompletableFuture.
-     *
-     * <p>
-     *     An example usage is:
-     *     <pre>
- .map(existing -> {
-     return etcd.getKVClient().delete(existing.getKey());
- })
- .reduce(EtcdUtils::byComposingCompletables)
- .orElse(completedDeletedResponse())
- .thenApply(deleteResponse -> agentType);
-     *     </pre>
-     * </p>
-     * @return a {@link CompletableFuture} that is resolved when the given completables are resolved
-     */
-    public static <T> CompletableFuture<T> byComposingCompletables(CompletableFuture<T> completableL,
-                                                                   CompletableFuture<T> completableR) {
-        return completableL.thenCompose(o -> completableR);
-    }
-
     public static boolean mapContainsAll(Map<String, String> superset, Map<String, String> target) {
         return superset.entrySet().containsAll(target.entrySet());
-    }
-
-    public static CompletableFuture<GetResponse> buildGetResponse(ObjectMapper objectMapper,
-                                                                  String key, Object value) throws JsonProcessingException {
-        return CompletableFuture.completedFuture(
-                new GetResponse(
-                        RangeResponse.newBuilder()
-                                .addKvs(
-                                        io.etcd.jetcd.api.KeyValue.newBuilder()
-                                                .setKey(ByteString.copyFromUtf8(key))
-                                                .setValue(ByteString.copyFrom(
-                                                        objectMapper.writeValueAsBytes(value)
-                                                ))
-                                                .build()
-                                )
-                                .setCount(1)
-                                .build()
-                )
-        );
     }
 
     /**

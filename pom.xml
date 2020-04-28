@@ -29,7 +29,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <java.version>11</java.version>
-    <jetcd.version>0.3.0</jetcd.version>
+    <jetcd.version>0.5.3</jetcd.version>
     <jacoco-maven-plugin.version>0.8.5</jacoco-maven-plugin.version>
   </properties>
 
@@ -61,13 +61,19 @@
     <dependency>
       <groupId>io.etcd</groupId>
       <artifactId>jetcd-core</artifactId>
-      <version>${jetcd.version}</version>
     </dependency>
     <dependency>
       <!-- for etcd/grpc tls support -->
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative-boringssl-static</artifactId>
-      <version>2.0.25.Final</version>
+    </dependency>
+    <dependency>
+      <!--
+      Avoid dependency conflict with fluency-core by preferring jetcd's.
+      This is a managed dependency from jetcd-parent import below.
+      -->
+      <groupId>net.jodah</groupId>
+      <artifactId>failsafe</artifactId>
     </dependency>
 
     <dependency>
@@ -115,6 +121,13 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-dependencies</artifactId>
         <version>2.2.4.RELEASE</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.etcd</groupId>
+        <artifactId>jetcd-parent</artifactId>
+        <version>${jetcd.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>

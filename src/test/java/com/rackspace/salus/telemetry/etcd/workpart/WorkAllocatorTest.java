@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
+import com.rackspace.salus.telemetry.etcd.EtcdClusterResource;
 import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.KeyValue;
 import io.etcd.jetcd.kv.GetResponse;
 import io.etcd.jetcd.kv.TxnResponse;
-import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import io.etcd.jetcd.op.Cmp;
 import io.etcd.jetcd.op.CmpTarget;
 import io.etcd.jetcd.op.Op;
@@ -96,7 +96,7 @@ public class WorkAllocatorTest {
     workerProperties.setPrefix("/" + testName.getMethodName() + "/");
 
     client = Client.builder().endpoints(
-        etcd.cluster().getClientEndpoints()
+        etcd.getClientEndpoints()
     ).build();
 
     workAllocatorsInTest = new ArrayList<>();

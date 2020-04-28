@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,10 @@ import static org.junit.Assert.assertNull;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rackspace.salus.common.util.KeyHashing;
+import com.rackspace.salus.telemetry.etcd.EtcdClusterResource;
 import com.rackspace.salus.telemetry.model.ResourceInfo;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.KeyValue;
-import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import io.etcd.jetcd.lease.LeaseGrantResponse;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -55,7 +55,7 @@ public class EnvoyResourceManagementTest {
         @Bean
         public Client getClient() {
             return Client.builder().endpoints(
-                etcd.cluster().getClientEndpoints()
+                etcd.getClientEndpoints()
             ).build();
         }
     }
