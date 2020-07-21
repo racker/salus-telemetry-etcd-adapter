@@ -33,6 +33,7 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Profile;
 
 @SpringBootConfiguration
 @ComponentScan
@@ -93,6 +94,7 @@ public class TelemetryCoreEtcdModule {
         new DefaultThreadFactory("etcd"));
   }
 
+  @Profile("etcd-health-indicator")
   @Bean
   public EtcdHealthIndicator etcdHealthIndicator() {
     return new EtcdHealthIndicator(etcdClient());
