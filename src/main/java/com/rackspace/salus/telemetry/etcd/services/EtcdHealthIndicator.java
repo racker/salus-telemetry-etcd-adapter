@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,15 +20,22 @@ import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.kv.GetResponse;
 import java.util.concurrent.ExecutionException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.context.annotation.Profile;
 
 /**
  * Provides a Spring Boot actuator health indicator that determines the health of etcd by
  * performing a retrieval of an arbitrary key ("/"). Etcd is deemed healthy when that key
  * retrieval completes without an exception.
+ * <p>
+ *   This health indicator is enabled by activating the Spring profile "etcd-health-indicator"
+ * </p>
  */
+@Profile("etcd-health-indicator")
+@Slf4j
 public class EtcdHealthIndicator implements HealthIndicator {
 
   private final Client etcd;
@@ -45,6 +52,7 @@ public class EtcdHealthIndicator implements HealthIndicator {
           .get();
       return Health.up().build();
     } catch (InterruptedException | ExecutionException e) {
+      log.debug("etcd health indicator failed", e);
       return Health.down(e).build();
     }
   }
