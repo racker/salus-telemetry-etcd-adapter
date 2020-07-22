@@ -24,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.context.annotation.Profile;
 
 /**
  * Provides a Spring Boot actuator health indicator that determines the health of etcd by
@@ -34,7 +33,6 @@ import org.springframework.context.annotation.Profile;
  *   This health indicator is enabled by activating the Spring profile "etcd-health-indicator"
  * </p>
  */
-@Profile("etcd-health-indicator")
 @Slf4j
 public class EtcdHealthIndicator implements HealthIndicator {
 
