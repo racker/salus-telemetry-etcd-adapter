@@ -61,6 +61,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ScheduledFuture;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -669,7 +670,7 @@ public class WorkAllocator implements SmartLifecycle {
               // ...extract just the worker ID
               .map(Bits::valueAsString)
               // ...group and count
-              .collect(Collectors.groupingBy(s -> s, Collectors.counting()))
+              .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
               ;
 
           // nothing active or nothing for us yet, so we're a "least loaded" candidate
