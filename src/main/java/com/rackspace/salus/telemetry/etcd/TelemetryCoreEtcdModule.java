@@ -87,10 +87,7 @@ public class TelemetryCoreEtcdModule {
   }
 
   private ExecutorService etcdExecutorService() {
-    // A queuing executor is needed since the chained, CompletableFuture based
-    // etcd operations can easily exhaust a limited thread pool and cause a deadlock
-    // at the point of executor submission
-    return Executors.newFixedThreadPool(properties.getMaxExecutorThreads(),
+    return Executors.newCachedThreadPool(
         new DefaultThreadFactory("etcd"));
   }
 
