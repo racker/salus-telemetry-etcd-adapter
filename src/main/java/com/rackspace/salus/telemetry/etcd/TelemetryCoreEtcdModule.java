@@ -28,6 +28,7 @@ import javax.net.ssl.SSLException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.task.TaskExecutorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
@@ -90,10 +91,11 @@ public class TelemetryCoreEtcdModule {
     int corePoolSize = properties.getCoreExecutorThreads();
     log.info("Configured etcd client executor pool corePoolSize={}", corePoolSize);
 
-    final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(corePoolSize);
-    executor.setAllowCoreThreadTimeOut(true);
-    executor.setThreadNamePrefix("etcd");
+    final ThreadPoolTaskExecutor executor = new TaskExecutorBuilder()
+        .corePoolSize(corePoolSize)
+        .allowCoreThreadTimeOut(true)
+        .threadNamePrefix("etcd")
+        .build();
     executor.initialize();
 
     return new ExecutorServiceAdapter(executor);
