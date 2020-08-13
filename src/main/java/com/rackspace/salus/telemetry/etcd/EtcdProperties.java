@@ -48,10 +48,9 @@ public class EtcdProperties {
      */
     String keyPassword;
 
-    long envoyLeaseSec = 30;
-
     /**
-     * Configures the maximum size of the thread pool used for etcd client operations.
+     * Configures the core size of the thread pool used for etcd client operations.
+     * Defaults to 2 x available processors.
      */
-    int maxExecutorThreads = 4;
+    int coreExecutorThreads = 2 * Runtime.getRuntime().availableProcessors();
 }

@@ -22,10 +22,8 @@ import io.etcd.jetcd.Client;
 import io.etcd.jetcd.ClientBuilder;
 import io.grpc.netty.GrpcSslContexts;
 import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import javax.net.ssl.SSLException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +32,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.task.support.ExecutorServiceAdapter;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @SpringBootConfiguration
 @ComponentScan
@@ -87,8 +87,16 @@ public class TelemetryCoreEtcdModule {
   }
 
   private ExecutorService etcdExecutorService() {
-    return Executors.newCachedThreadPool(
-        new DefaultThreadFactory("etcd"));
+    int corePoolSize = properties.getCoreExecutorThreads();
+    log.info("Configured etcd client executor pool corePoolSize={}", corePoolSize);
+
+    final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(corePoolSize);
+    executor.setAllowCoreThreadTimeOut(true);
+    executor.setThreadNamePrefix("etcd");
+    executor.initialize();
+
+    return new ExecutorServiceAdapter(executor);
   }
 
   @Profile("etcd-health-indicator")
