@@ -16,7 +16,6 @@
 
 package com.rackspace.salus.telemetry.etcd.services;
 
-import com.rackspace.salus.telemetry.etcd.EtcdProperties;
 import io.etcd.jetcd.Client;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,14 +28,12 @@ import org.springframework.stereotype.Service;
 public class EnvoyLeaseTracking {
 
     private final Client etcd;
-    private final EtcdProperties etcdProperties;
 
-    private ConcurrentHashMap<String, Long> envoyLeases = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Long> envoyLeases = new ConcurrentHashMap<>();
 
     @Autowired
-    public EnvoyLeaseTracking(Client etcd, EtcdProperties etcdProperties) {
+    public EnvoyLeaseTracking(Client etcd) {
         this.etcd = etcd;
-        this.etcdProperties = etcdProperties;
     }
 
   public CompletableFuture<Long> grant(String leaseName, long timeoutInSecs) {
@@ -48,10 +45,6 @@ public class EnvoyLeaseTracking {
         return leaseId;
       });
   }
-
-    public CompletableFuture<Long> grant(String envoyInstanceId) {
-        return grant(envoyInstanceId, etcdProperties.getEnvoyLeaseSec());
-    }
 
     public boolean keepAlive(String envoyInstanceId) {
         final Long leaseId = envoyLeases.get(envoyInstanceId);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,7 +85,7 @@ public class EnvoyLeaseTrackingTest {
         when(etcd.getLeaseClient()).thenReturn(lease);
         when(lease.grant(anyLong())).thenReturn(CompletableFuture.completedFuture(grantResponse));
         when(grantResponse.getID()).thenReturn(leaseId);
-        final Long result = envoyLeaseTracking.grant(envoyInstance).join();
+        final Long result = envoyLeaseTracking.grant(envoyInstance, 60).join();
 
         assertEquals(leaseId, result);
 
