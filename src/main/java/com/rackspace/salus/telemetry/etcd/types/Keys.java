@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ public class Keys {
     public static final String FMT_RESOURCE_ACTIVE_BY_HASH = "/resources/active/{md5OfTenantAndIdentifierValue}";
 
     /**
-     * Value is count of bound monitors, leading zero padded to 10 digits
+     * Value is not used, only the key existence is significant
      */
     public static final String FMT_ZONE_ACTIVE = "/zones/active/{tenant}/{zoneName}/{resourceId}";
     public static final Pattern PTN_ZONE_ACTIVE = EtcdUtils.patternFromFormat(FMT_ZONE_ACTIVE);

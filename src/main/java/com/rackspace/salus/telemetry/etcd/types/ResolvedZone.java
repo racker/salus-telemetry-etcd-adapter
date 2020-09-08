@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import com.rackspace.salus.telemetry.etcd.EtcdUtils;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
+import org.springframework.util.Assert;
 
 /**
  * This class is both a data holder and utility for resolving given zone IDs and optionally
@@ -52,6 +53,25 @@ public class ResolvedZone {
       this.tenantId = null;
     }
     this.name = zoneName;
+  }
+
+  /**
+   * Convenience builder that resolves to a public or private zone based upon the
+   * prefix of the given <code>zoneName</code>
+   * @param zoneTenantId For private zones, the tenant owning the zone. For public, zones
+   * this is ignored.
+   * @param zoneName The zone name, where public zones are prefixed with {@value PUBLIC_PREFIX}
+   * @return a resolved public or private zone
+   */
+  public static ResolvedZone resolveZone(String zoneTenantId, String zoneName) {
+    if (zoneName.startsWith(PUBLIC_PREFIX)) {
+      return createPublicZone(zoneName);
+    }
+    else {
+      Assert.notNull(zoneTenantId, "Private zones require a tenantId");
+      return createPrivateZone(zoneTenantId, zoneName);
+    }
+
   }
 
   public static ResolvedZone createPublicZone(String zoneName) {

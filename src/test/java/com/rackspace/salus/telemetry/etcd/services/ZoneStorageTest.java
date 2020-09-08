@@ -20,11 +20,12 @@ import static com.rackspace.salus.telemetry.etcd.EtcdUtils.fromString;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING;
 import static com.rackspace.salus.telemetry.etcd.types.ResolvedZone.createPrivateZone;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -32,7 +33,6 @@ import static org.mockito.Mockito.when;
 
 import com.rackspace.salus.telemetry.etcd.EtcdClusterResource;
 import com.rackspace.salus.telemetry.etcd.EtcdUtils;
-import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
 import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.Client;
@@ -99,7 +99,7 @@ public class ZoneStorageTest {
         .join();
     assertThat(activeResponse.getKvs(), hasSize(1));
     assertThat(activeResponse.getKvs().get(0).getLease(), equalTo(leaseId));
-    assertThat(activeResponse.getKvs().get(0).getValue().toString(UTF_8), equalTo("0000000000"));
+    assertThat(activeResponse.getKvs().get(0).getValue().toString(UTF_8), equalTo("-"));
 
     final GetResponse expectedResponse = client.getKVClient()
         .get(fromString("/zones/expected/t-1/zone-1/r-1"))
@@ -124,111 +124,36 @@ public class ZoneStorageTest {
   }
 
   @Test
-  public void testUpdateBound_and_leastLoaded() {
-    // just use one lease for all three
+  public void testGetActivePollerResourceIdsInZone() {
     final long leaseId = grantLease();
+    final ResolvedZone zone = createPrivateZone("t-1", "z-1");
 
-    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
+    assertThat(zoneStorage.getActivePollerResourceIdsInZone(zone).join(), hasSize(0));
 
     zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
     zoneStorage.registerEnvoyInZone(zone, "e-2", "r-2", leaseId).join();
     zoneStorage.registerEnvoyInZone(zone, "e-3", "r-3", leaseId).join();
 
-    for (int i = 0; i < 10; ++i) {
-      zoneStorage.incrementBoundCount(zone, "r-1")
-      .join();
-    }
-    for (int i = 0; i < 20; ++i) {
-      zoneStorage.incrementBoundCount(zone, "r-2")
-      .join();
-    }
-    for (int i = 0; i < 5; ++i) {
-      zoneStorage.incrementBoundCount(zone, "r-3")
-      .join();
-    }
-
-    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 10, leaseId);
-    assertValueAndLease("/zones/active/t-1/zone-1/r-2", 20, leaseId);
-    assertValueAndLease("/zones/active/t-1/zone-1/r-3", 5, leaseId);
-
-    final Optional<EnvoyResourcePair> leastLoaded = zoneStorage.findLeastLoadedEnvoy(zone).join();
-    assertThat(leastLoaded.isPresent(), equalTo(true));
-    //noinspection OptionalGetWithoutIsPresent
-    assertThat(leastLoaded.get().getEnvoyId(), equalTo("e-3"));
-    assertThat(leastLoaded.get().getResourceId(), equalTo("r-3"));
+    assertThat(zoneStorage.getActivePollerResourceIdsInZone(zone).join(),
+        containsInAnyOrder("r-1", "r-2", "r-3"));
   }
 
   @Test
-  public void testIncrementBoundMoreThanOne() {
+  public void testGetResourceIdToEnvoyIdMap() {
     final long leaseId = grantLease();
+    final ResolvedZone zone = createPrivateZone("t-1", "z-1");
 
-    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
+    assertThat(zoneStorage.getResourceIdToEnvoyIdMap(zone).join(), equalTo(Map.of()));
 
     zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
+    zoneStorage.registerEnvoyInZone(zone, "e-2", "r-2", leaseId).join();
+    zoneStorage.registerEnvoyInZone(zone, "e-3", "r-3", leaseId).join();
 
-    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 0, leaseId);
-
-    zoneStorage.changeBoundCount(zone, "r-1", 12).join();
-
-    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 12, leaseId);
-  }
-
-  @Test
-  public void testDecrementBoundCount_normal() {
-    final long leaseId = grantLease();
-
-    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
-    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
-
-    zoneStorage.changeBoundCount(zone, "r-1", 12).join();
-
-    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 12, leaseId);
-
-    zoneStorage.decrementBoundCount(zone, "r-1").join();
-
-    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 11, leaseId);
-  }
-
-  @Test
-  public void testDecrementBoundCount_cappedAtZero() {
-    final long leaseId = grantLease();
-
-    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
-    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
-
-    zoneStorage.incrementBoundCount(zone, "r-1").join();
-
-    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 1, leaseId);
-
-    zoneStorage.decrementBoundCount(zone, "r-1").join();
-
-    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 0, leaseId);
-
-    zoneStorage.decrementBoundCount(zone, "r-1").join();
-
-    // and capped at zero
-    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 0, leaseId);
-  }
-
-  @Test
-  public void testDecrementBoundCount_decrementAfterRegister() {
-    final long leaseId = grantLease();
-
-    final ResolvedZone zone = createPrivateZone("t-1", "zone-1");
-    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
-
-    zoneStorage.decrementBoundCount(zone, "r-1").join();
-
-    // and capped at zero
-    assertValueAndLease("/zones/active/t-1/zone-1/r-1", 0, leaseId);
-  }
-
-  @Test
-  public void testLeastLoaded_emptyZone() {
-    final ResolvedZone zone = createPrivateZone("t-none", "zone-nowhere");
-
-    final Optional<EnvoyResourcePair> leastLoaded = zoneStorage.findLeastLoadedEnvoy(zone).join();
-    assertThat(leastLoaded.isPresent(), equalTo(false));
+    assertThat(zoneStorage.getResourceIdToEnvoyIdMap(zone).join(), equalTo(Map.of(
+        "r-1", "e-1",
+        "r-2", "e-2",
+        "r-3", "e-3"
+    )));
   }
 
   @Test
@@ -330,38 +255,6 @@ public class ZoneStorageTest {
     Optional<String> result = zoneStorage.getEnvoyIdForResource(zone, resourceId).join();
     assertTrue(result.isPresent());
     assertThat(result.get(), equalTo(envoyId));
-  }
-
-  @Test
-  public void testGetZoneBindingCounts_typical() {
-    final long leaseId = grantLease();
-    final ResolvedZone zone = createPrivateZone("t-1", "r-1");
-
-    zoneStorage.registerEnvoyInZone(zone, "e-1", "r-1", leaseId).join();
-    zoneStorage.registerEnvoyInZone(zone, "e-2", "r-2", leaseId).join();
-    zoneStorage.registerEnvoyInZone(zone, "e-3", "r-3", leaseId).join();
-
-    zoneStorage.changeBoundCount(zone, "r-1", 5).join();
-    zoneStorage.changeBoundCount(zone, "r-2", 7).join();
-    zoneStorage.changeBoundCount(zone, "r-3", 2).join();
-
-    final Map<EnvoyResourcePair, Integer> result = zoneStorage.getZoneBindingCounts(zone).join();
-
-    final Map<EnvoyResourcePair, Integer> expected = new HashMap<>();
-    expected.put(new EnvoyResourcePair().setEnvoyId("e-1").setResourceId("r-1"), 5);
-    expected.put(new EnvoyResourcePair().setEnvoyId("e-2").setResourceId("r-2"), 7);
-    expected.put(new EnvoyResourcePair().setEnvoyId("e-3").setResourceId("r-3"), 2);
-
-    assertThat(result, equalTo(expected));
-  }
-
-  @Test
-  public void testGetZoneBindingCounts_emptyZone() {
-    final ResolvedZone zone = createPrivateZone("t-1", "r-1");
-
-    final Map<EnvoyResourcePair, Integer> result = zoneStorage.getZoneBindingCounts(zone).join();
-
-    assertThat(result.isEmpty(), equalTo(true));
   }
 
   @Test
