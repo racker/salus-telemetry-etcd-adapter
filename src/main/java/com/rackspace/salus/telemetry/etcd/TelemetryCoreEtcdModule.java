@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,18 @@ import io.etcd.jetcd.ClientBuilder;
 import io.grpc.netty.GrpcSslContexts;
 import io.netty.handler.ssl.SslContextBuilder;
 import java.io.File;
+import java.util.concurrent.ExecutorService;
 import javax.net.ssl.SSLException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.task.TaskExecutorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Profile;
+import org.springframework.core.task.support.ExecutorServiceAdapter;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @SpringBootConfiguration
 @ComponentScan
@@ -47,8 +52,10 @@ public class TelemetryCoreEtcdModule {
   @Bean
   public Client etcdClient() {
     log.debug("Configuring etcd connectivity to {}", properties.getUrl());
+
     final ClientBuilder builder = Client.builder()
-        .endpoints(properties.getUrl());
+        .endpoints(properties.getUrl())
+        .executorService(etcdExecutorService());
 
     if (properties.getCaCert() != null) {
       log.debug("Enabling SSL for etcd with CA cert at {}", properties.getCaCert());
@@ -80,6 +87,21 @@ public class TelemetryCoreEtcdModule {
     return builder.build();
   }
 
+  private ExecutorService etcdExecutorService() {
+    int corePoolSize = properties.getCoreExecutorThreads();
+    log.info("Configured etcd client executor pool corePoolSize={}", corePoolSize);
+
+    final ThreadPoolTaskExecutor executor = new TaskExecutorBuilder()
+        .corePoolSize(corePoolSize)
+        .allowCoreThreadTimeOut(true)
+        .threadNamePrefix("etcd")
+        .build();
+    executor.initialize();
+
+    return new ExecutorServiceAdapter(executor);
+  }
+
+  @Profile("etcd-health-indicator")
   @Bean
   public EtcdHealthIndicator etcdHealthIndicator() {
     return new EtcdHealthIndicator(etcdClient());

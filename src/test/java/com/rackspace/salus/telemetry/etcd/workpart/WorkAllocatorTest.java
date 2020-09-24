@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
 
 package com.rackspace.salus.telemetry.etcd.workpart;
 
+import static com.rackspace.salus.telemetry.etcd.workpart.Bits.ACTIVE_SET;
 import static com.rackspace.salus.telemetry.etcd.workpart.Bits.fromString;
+import static com.rackspace.salus.telemetry.etcd.workpart.Bits.valueAsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.Assert.assertEquals;
@@ -26,12 +28,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
+import com.rackspace.salus.telemetry.etcd.EtcdClusterResource;
 import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.KeyValue;
 import io.etcd.jetcd.kv.GetResponse;
 import io.etcd.jetcd.kv.TxnResponse;
-import io.etcd.jetcd.launcher.junit.EtcdClusterResource;
 import io.etcd.jetcd.op.Cmp;
 import io.etcd.jetcd.op.CmpTarget;
 import io.etcd.jetcd.op.Op;
@@ -96,7 +98,7 @@ public class WorkAllocatorTest {
     workerProperties.setPrefix("/" + testName.getMethodName() + "/");
 
     client = Client.builder().endpoints(
-        etcd.cluster().getClientEndpoints()
+        etcd.getClientEndpoints()
     ).build();
 
     workAllocatorsInTest = new ArrayList<>();
@@ -520,18 +522,21 @@ public class WorkAllocatorTest {
     workProcessor2.hasActiveWorkItems(0, TIMEOUT);
   }
 
-  private void assertWorkLoad(int expected, String workAllocatorId)
+  private void assertWorkLoad(long expected, String workAllocatorId)
       throws ExecutionException, InterruptedException {
-    final int actualWorkLoad = client.getKVClient()
+    final ByteSequence activeSetKey = fromString(workerProperties.getPrefix() + ACTIVE_SET);
+
+    final long actualWorkLoad = client.getKVClient()
         .get(
-            fromString(workerProperties.getPrefix() + Bits.WORKERS_SET + workAllocatorId)
+            activeSetKey,
+            GetOption.newBuilder()
+                .withPrefix(activeSetKey)
+                .build()
         )
-        .thenApply(getResponse -> {
-          final int actual = Integer
-              .parseInt(
-                  getResponse.getKvs().get(0).getValue().toString(StandardCharsets.UTF_8), 10);
-          return actual;
-        })
+        .thenApply(getResponse ->
+            getResponse.getKvs().stream()
+                .filter(keyValue -> valueAsString(keyValue).equals(workAllocatorId))
+                .count())
         .get();
 
     assertEquals(expected, actualWorkLoad);

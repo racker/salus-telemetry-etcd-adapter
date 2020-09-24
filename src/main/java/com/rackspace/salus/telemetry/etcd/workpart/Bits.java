@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,12 +27,6 @@ public class Bits {
   public static final String ACTIVE_SET = "active/";
   public static final String WORKERS_SET = "workers/";
 
-  /**
-   * This format is zero-padded to ensure that the work load values are textually sortable
-   * when stored as values in etcd.
-   */
-  public static final String WORK_LOAD_FORMAT = "%010d";
-
   public static ByteSequence fromString(String utf8string) {
     return ByteSequence.from(utf8string, StandardCharsets.UTF_8);
   }
@@ -59,5 +53,9 @@ public class Bits {
 
   public static boolean isDeleteKeyEvent(WatchEvent event) {
     return event.getEventType() == EventType.DELETE;
+  }
+
+  static String valueAsString(KeyValue keyValue) {
+    return keyValue.getValue().toString(StandardCharsets.UTF_8);
   }
 }

@@ -40,7 +40,7 @@ public class EtcdUtilsTest {
             "t1", AgentType.FILEBEAT, "ais1"
         );
 
-        assertEquals("/tenants/t1/agentInstallSelectors/FILEBEAT/ais1", result.toString(
+        assertEquals("/tenants/t1/agentinstallselectors/filebeat/ais1", result.toString(
             StandardCharsets.UTF_8));
     }
 
@@ -48,7 +48,7 @@ public class EtcdUtilsTest {
     public void buildKey_noVars() {
         final ByteSequence result = EtcdUtils.buildKey("/agentInstalls");
 
-        assertEquals("/agentInstalls", result.toString(StandardCharsets.UTF_8));
+        assertEquals("/agentinstalls", result.toString(StandardCharsets.UTF_8));
     }
 
     @Test(expected = IllegalArgumentException.class)

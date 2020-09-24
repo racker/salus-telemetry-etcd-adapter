@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package com.rackspace.salus.telemetry.etcd.services;
 
-import com.rackspace.salus.telemetry.etcd.EtcdProperties;
 import io.etcd.jetcd.Client;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,28 +28,23 @@ import org.springframework.stereotype.Service;
 public class EnvoyLeaseTracking {
 
     private final Client etcd;
-    private final EtcdProperties etcdProperties;
 
-    private ConcurrentHashMap<String, Long> envoyLeases = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Long> envoyLeases = new ConcurrentHashMap<>();
 
     @Autowired
-    public EnvoyLeaseTracking(Client etcd, EtcdProperties etcdProperties) {
+    public EnvoyLeaseTracking(Client etcd) {
         this.etcd = etcd;
-        this.etcdProperties = etcdProperties;
     }
 
   public CompletableFuture<Long> grant(String leaseName, long timeoutInSecs) {
     return etcd.getLeaseClient().grant(timeoutInSecs)
       .thenApply(leaseGrantResponse -> {
         final long leaseId = leaseGrantResponse.getID();
+        log.debug("Tracking lease={} for envoy={}", leaseId, leaseName);
         envoyLeases.put(leaseName, leaseId);
         return leaseId;
       });
   }
-
-    public CompletableFuture<Long> grant(String envoyInstanceId) {
-        return grant(envoyInstanceId, etcdProperties.getEnvoyLeaseSec());
-    }
 
     public boolean keepAlive(String envoyInstanceId) {
         final Long leaseId = envoyLeases.get(envoyInstanceId);
@@ -71,7 +65,10 @@ public class EnvoyLeaseTracking {
                     .thenAccept(leaseRevokeResponse -> {
                         log.debug("Revoked lease={} for envoy={}", leaseId, envoyInstanceId);
                     })
-                    .join();
+                    .exceptionally(throwable -> {
+                      log.warn("Failed to revoke lease={} for envoy={} message={}", leaseId, envoyInstanceId, throwable.getMessage());
+                      return null;
+                    });
         }
         else {
             log.warn("Did not have lease for envoyInstanceId={}", envoyInstanceId);

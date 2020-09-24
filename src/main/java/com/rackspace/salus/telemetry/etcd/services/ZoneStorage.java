@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Rackspace US, Inc.
+ * Copyright 2020 Rackspace US, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_ACTIVE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPECTED;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING;
 
-import com.rackspace.salus.telemetry.etcd.types.EnvoyResourcePair;
 import com.rackspace.salus.telemetry.etcd.types.EtcdStorageException;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
 import io.etcd.jetcd.ByteSequence;
@@ -38,17 +37,17 @@ import io.etcd.jetcd.op.Cmp;
 import io.etcd.jetcd.op.CmpTarget;
 import io.etcd.jetcd.op.Op;
 import io.etcd.jetcd.options.GetOption;
-import io.etcd.jetcd.options.GetOption.SortOrder;
-import io.etcd.jetcd.options.GetOption.SortTarget;
 import io.etcd.jetcd.options.LeaseOption;
 import io.etcd.jetcd.options.PutOption;
 import io.etcd.jetcd.watch.WatchEvent;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import javax.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,8 +61,6 @@ import org.springframework.stereotype.Service;
 @Service
 @Slf4j
 public class ZoneStorage {
-
-  private static final String FMT_BOUND_COUNT = "%010d";
 
   private final Client etcd;
   private EnvoyLeaseTracking envoyLeaseTracking;
@@ -89,7 +86,8 @@ public class ZoneStorage {
     return CompletableFuture.allOf(
         kv.put(
             buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId),
-            fromString(String.format(FMT_BOUND_COUNT, 0)),
+            // value isn't used, so just put a marker value so it shows up in etcdctl debugging
+            fromString("-"),
             PutOption.newBuilder()
                 .withLeaseId(envoyLeaseId)
                 .build()
@@ -102,136 +100,25 @@ public class ZoneStorage {
     );
   }
 
-  public CompletableFuture<Integer> incrementBoundCount(ResolvedZone zone, String resourceId) {
-    return changeBoundCount(zone, resourceId, 1);
-  }
-
-  public CompletableFuture<Integer> decrementBoundCount(ResolvedZone zone, String resourceId) {
-    return changeBoundCount(zone, resourceId, -1);
-  }
-
-  /**
-   * Changes the assigned count of bound monitors to an active envoy-resource
-   * @param zone the zone of the envoy-resource
-   * @param resourceId the envoy's resource ID
-   * @param amount the amount to chagne the assignmnet count, positive or negative
-   * @return the new assignment count
-   */
-  public CompletableFuture<Integer> changeBoundCount(ResolvedZone zone, String resourceId,
-                                                     int amount) {
-    log.debug("Changing bound count of resource={} in zone={} by amount={}", resourceId, zone, amount);
-
-    final ByteSequence key = buildKey(
-        FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), resourceId);
-
-    return etcd.getKVClient().get(key)
-        .thenCompose(getResponse -> {
-
-          if (getResponse.getKvs().isEmpty()) {
-            throw new EtcdStorageException(
-                String.format("Active zone key not present: %s", key.toString(StandardCharsets.UTF_8)));
-          }
-
-          final KeyValue kvEntry = getResponse.getKvs().get(0);
-          final int prevCount = Integer.parseInt(kvEntry.getValue().toString(StandardCharsets.UTF_8), 10);
-          final int newCount = constrainNewCount(prevCount + amount, zone, resourceId);
-
-          log.debug("Putting new bound count={} for resource={} in zone={}", newCount, resourceId, zone);
-
-          final ByteSequence newValue = fromString(String.format(
-              FMT_BOUND_COUNT,
-              newCount
-          ));
-
-          return etcd.getKVClient().txn()
-              .If(
-                  new Cmp(key, Cmp.Op.EQUAL, CmpTarget.version(kvEntry.getVersion()))
-              )
-              .Then(
-                  Op.put(
-                      key,
-                      newValue,
-                      PutOption.newBuilder()
-                          .withLeaseId(kvEntry.getLease())
-                          .build()
-                  )
-              )
-              .commit()
-              .thenCompose(txnResponse -> {
-
-                // the txn is never successful if the above If condition is not satisfied
-                if (txnResponse.isSucceeded()) {
-                  return CompletableFuture.completedFuture(newCount);
-                } else {
-                  log.debug(
-                      "Re-trying incrementing bound count of resource={} in zone={} due to collision",
-                      resourceId, zone
-                  );
-                  return changeBoundCount(zone, resourceId, amount);
-                }
-
-              });
-        });
-  }
-
-  private int constrainNewCount(int newCount,
-                                ResolvedZone zone, String resourceId) {
-    if (newCount >= 0) {
-      return newCount;
-    }
-    // avoid negative counts
-    else {
-      // but log them since they shouldn't happen
-      log.warn("Prevented negative bound count for zone={} resource={}", zone, resourceId);
-      return 0;
-    }
-  }
-
-  /**
-   * Determines which envoy has the least amount of bound monitors assigned to it.
-   * @param zone The resolved zone to search for an envoy.
-   * @return The envoyId/resourceId pair for the envoy that has the least amount of bound monitors.
-   */
-  public CompletableFuture<Optional<EnvoyResourcePair>> findLeastLoadedEnvoy(ResolvedZone zone) {
-    log.debug("Finding least loaded envoy in zone={}", zone);
-
+  public CompletableFuture<List<String>> getActivePollerResourceIdsInZone(ResolvedZone zone) {
     final ByteSequence prefix =
         buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
 
-    return etcd.getKVClient().get(
-        prefix,
-        GetOption.newBuilder()
-            .withPrefix(prefix)
-            .withSortField(SortTarget.VALUE)
-            .withSortOrder(SortOrder.ASCEND)
-            .withLimit(1)
-            .build()
-    )
-        .thenApply(getResponse -> {
-          if (getResponse.getKvs().isEmpty()) {
-            return null;
-          } else {
-            final String envoyKeyInZone = getResponse.getKvs().get(0).getKey().toString(StandardCharsets.UTF_8);
-            return envoyKeyInZone.substring(envoyKeyInZone.lastIndexOf("/") + 1);
-          }
-        })
-        .thenApply(resourceId -> {
-          if (resourceId == null) {
-            return Optional.empty();
-          } else {
-
-            Optional<String> envoyId = getEnvoyIdForResource(zone, resourceId).join();
-            if (!envoyId.isPresent()) {
-              return Optional.empty();
-            } else {
-              EnvoyResourcePair pair = new EnvoyResourcePair()
-                  .setEnvoyId(envoyId.get())
-                  .setResourceId(resourceId);
-
-              return Optional.of(pair);
-            }
-          }
-        });
+    return etcd.getKVClient()
+        .get(
+            prefix,
+            GetOption.newBuilder()
+                .withPrefix(prefix)
+                .build()
+        )
+        .thenApply(getResponse ->
+            getResponse.getKvs().stream()
+                .map(kv -> {
+                  final String key = kv.getKey().toString(StandardCharsets.UTF_8);
+                  return key.substring(key.lastIndexOf("/") + 1);
+                })
+                .collect(Collectors.toList())
+        );
   }
 
   public CompletableFuture<Long> getActiveEnvoyCountForZone(ResolvedZone zone) {
@@ -245,57 +132,6 @@ public class ZoneStorage {
                       .withCountOnly(true)
                       .build()
       ).thenApply(GetResponse::getCount);
-  }
-
-  /**
-   * Returns a snapshot of the envoy-resources in the requested zone and the current binding
-   * counts for each.
-   * @param zone the zone to evaluate
-   * @return a mapping of envoy-resource to the binding count
-   */
-  public CompletableFuture<Map<EnvoyResourcePair, Integer>> getZoneBindingCounts(
-      ResolvedZone zone) {
-    final ByteSequence prefix =
-        buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
-
-    return etcd.getKVClient().get(
-        prefix,
-        GetOption.newBuilder()
-            .withPrefix(prefix)
-            .build()
-    ).thenApply(getResponse -> {
-
-      final Map<EnvoyResourcePair, Integer> bindingCounts = new HashMap<>();
-
-      for (KeyValue kv : getResponse.getKvs()) {
-        final String key = kv.getKey().toString(StandardCharsets.UTF_8);
-        final int count = Integer.parseInt(kv.getValue().toString(StandardCharsets.UTF_8), 10);
-        final String resourceId = key.substring(key.lastIndexOf("/") + 1);
-
-        try {
-          final Optional<String> envoyId = getEnvoyIdForResource(zone, resourceId).get();
-
-          if (envoyId.isPresent()) {
-
-            bindingCounts.put(
-                new EnvoyResourcePair().setResourceId(resourceId).setEnvoyId(envoyId.get()),
-                count
-            );
-
-          }
-          else {
-            log.warn("No envoy ID found for resource={} in zone={}", resourceId, zone);
-          }
-        } catch (InterruptedException | ExecutionException e) {
-          log.warn("Unexpected issue while getting envoy ID of resource={} in zone={}",
-              resourceId, zone);
-        }
-
-      }
-
-      return bindingCounts;
-    });
-
   }
 
   /**
@@ -315,19 +151,36 @@ public class ZoneStorage {
             .build()
     ).thenApply(getResponse -> {
 
-      final Map<String, String> envoyResourceMap = new HashMap<>();
+      final Map<String, String> mapping = new HashMap<>();
 
       for (KeyValue kv : getResponse.getKvs()) {
         final String key = kv.getKey().toString(StandardCharsets.UTF_8);
         final String resourceId = key.substring(key.lastIndexOf("/") + 1);
         final String envoyId = kv.getValue().toString(StandardCharsets.UTF_8);
 
-        envoyResourceMap.put(envoyId, resourceId);
+        mapping.put(envoyId, resourceId);
       }
 
-      return envoyResourceMap;
+      return mapping;
     });
 
+  }
+
+  /**
+   * Returns a mapping of poller-envoy resourceId to envoyId for the provided zone.
+   * @param zone The zone to get all envoy id -> resource id mappings.
+   * @return The mappings found for the zone.
+   */
+  public CompletableFuture<Map<String, String>> getResourceIdToEnvoyIdMap(
+      ResolvedZone zone) {
+    return getEnvoyIdToResourceIdMap(zone)
+        .thenApply(envoyToResourceMap ->
+            envoyToResourceMap.entrySet().stream()
+            .collect(Collectors.toMap(
+                // flip the key <- value
+                Entry::getValue,
+                Entry::getKey
+            )));
   }
 
   /**
