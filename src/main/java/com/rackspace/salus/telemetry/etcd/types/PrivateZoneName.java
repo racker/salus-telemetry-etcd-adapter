@@ -34,7 +34,7 @@ import javax.validation.Payload;
 @Constraint(validatedBy = ZoneNameValidators.Private.class)
 public @interface PrivateZoneName {
 
-  String message() default "zone name must be private";
+  String message() default "must be private";
 
   Class<?>[] groups() default {};
 
