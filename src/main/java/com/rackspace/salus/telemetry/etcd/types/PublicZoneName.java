@@ -34,7 +34,7 @@ import javax.validation.Payload;
 @Constraint(validatedBy = ZoneNameValidators.Public.class)
 public @interface PublicZoneName {
 
-  String message() default "zone name must be public";
+  String message() default "must be public";
 
   Class<?>[] groups() default {};
 
