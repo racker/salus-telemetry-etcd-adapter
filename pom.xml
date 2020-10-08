@@ -100,6 +100,11 @@
       <version>${jetcd.version}</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <version>1.15.0-rc2</version>
+    </dependency>
 
     <dependency>
       <groupId>org.projectlombok</groupId>
