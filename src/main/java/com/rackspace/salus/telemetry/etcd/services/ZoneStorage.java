@@ -21,6 +21,7 @@ import static com.rackspace.salus.telemetry.etcd.EtcdUtils.fromString;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_ACTIVE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPECTED;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING_IN_ZONE;
 
 import com.rackspace.salus.telemetry.etcd.types.EtcdStorageException;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
@@ -104,21 +105,7 @@ public class ZoneStorage {
     final ByteSequence prefix =
         buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
 
-    return etcd.getKVClient()
-        .get(
-            prefix,
-            GetOption.newBuilder()
-                .withPrefix(prefix)
-                .build()
-        )
-        .thenApply(getResponse ->
-            getResponse.getKvs().stream()
-                .map(kv -> {
-                  final String key = kv.getKey().toString(StandardCharsets.UTF_8);
-                  return key.substring(key.lastIndexOf("/") + 1);
-                })
-                .collect(Collectors.toList())
-        );
+    return getPollerResourceIdsInZone(prefix);
   }
 
   public CompletableFuture<Long> getActiveEnvoyCountForZone(ResolvedZone zone) {
@@ -284,6 +271,30 @@ public class ZoneStorage {
 
   public Watch getWatchClient() {
     return etcd.getWatchClient();
+  }
+
+  public CompletableFuture<List<String>> getExpiredPollerResourceIdsInZone(ResolvedZone zone) {
+    final ByteSequence prefix = buildKey(FMT_ZONE_EXPIRING_IN_ZONE, zone.getTenantForKey(),
+        zone.getZoneNameForKey());
+    return getPollerResourceIdsInZone(prefix);
+  }
+
+  public CompletableFuture<List<String>> getPollerResourceIdsInZone(ByteSequence prefix) {
+    return etcd.getKVClient()
+        .get(
+            prefix,
+            GetOption.newBuilder()
+                .withPrefix(prefix)
+                .build()
+        )
+        .thenApply(getResponse ->
+            getResponse.getKvs().stream()
+                .map(kv -> {
+                  final String key = kv.getKey().toString(StandardCharsets.UTF_8);
+                  return key.substring(key.lastIndexOf("/") + 1);
+                })
+                .collect(Collectors.toList())
+        );
   }
 
   @PreDestroy
