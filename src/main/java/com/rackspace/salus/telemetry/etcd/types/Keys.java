@@ -39,7 +39,7 @@ public class Keys {
      */
     public static final String FMT_ZONE_EXPIRING = "/zones/expiring/{tenant}/{zoneName}/{resourceId}";
     public static final Pattern PTN_ZONE_EXPIRING = EtcdUtils.patternFromFormat(FMT_ZONE_EXPIRING);
-    public static final String FMT_ZONE_EXPIRING_IN_ZONE = "/zones/expiring/{tenant}/{zoneName}/";
+    public static final String FMT_ZONE_EXPIRING_IN_ZONE = "/zones/expiring/{tenant}/{zoneName}";
 
     public static final String PREFIX_ZONE_EXPECTED = "/zones/expected";
     public static final String PREFIX_ZONE_ACTIVE = "/zones/active";

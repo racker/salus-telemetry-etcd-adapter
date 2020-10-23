@@ -329,4 +329,26 @@ public class ZoneStorageTest {
     assertThat(envoyListPublicZone, hasSize(1));
     assertEquals(envoyListPublicZone.get(0), resourceId.toLowerCase());
   }
+
+  @Test
+  public void testGetExpiredPollerResourceIds_PerTenant_AllZones() {
+    ResolvedZone zone1 = createPrivateZone("t-1", RandomStringUtils.randomAlphabetic(10));
+    ResolvedZone zone2 = createPrivateZone("t-1", RandomStringUtils.randomAlphabetic(10));
+    final String resourceId1 = RandomStringUtils.randomAlphabetic(10);
+    final String resourceId2 = RandomStringUtils.randomAlphabetic(10);
+    final String envoyId = RandomStringUtils.randomAlphabetic(10);
+    final long pollerTimeout = 1000;
+    final long leaseId = grantLease(pollerTimeout);
+
+    when(envoyLeaseTracking.grant(anyString(), anyLong()))
+        .thenReturn(CompletableFuture.completedFuture(leaseId));
+
+    zoneStorage.createExpiringEntry(zone1, resourceId1, envoyId, pollerTimeout).join();
+    zoneStorage.createExpiringEntry(zone2, resourceId2, envoyId, pollerTimeout).join();
+    ResolvedZone zoneAllTenants = createPrivateZone("t-1", "");
+    List<String> envoyList = zoneStorage.getExpiredPollerResourceIdsInZone(zoneAllTenants).join();
+
+    assertThat(envoyList, hasSize(2));
+    assertThat(envoyList, containsInAnyOrder(resourceId1.toLowerCase(), resourceId2.toLowerCase()));
+  }
 }
