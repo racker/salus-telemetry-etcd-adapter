@@ -51,6 +51,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import javax.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -274,7 +275,11 @@ public class ZoneStorage {
   }
 
   public CompletableFuture<List<String>> getExpiredPollerResourceIdsInZone(ResolvedZone zone) {
-    final ByteSequence prefix = buildKey(FMT_ZONE_EXPIRING_IN_ZONE, zone.getTenantForKey(),
+    StringBuilder key = new StringBuilder(FMT_ZONE_EXPIRING_IN_ZONE);
+    if(StringUtils.isNotBlank(zone.getName())) {
+      key.append("/");
+    }
+    final ByteSequence prefix = buildKey(key.toString(), zone.getTenantForKey(),
         zone.getZoneNameForKey());
     return getPollerResourceIdsInZone(prefix);
   }
