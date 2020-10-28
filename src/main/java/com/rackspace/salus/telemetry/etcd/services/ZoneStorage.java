@@ -19,7 +19,9 @@ package com.rackspace.salus.telemetry.etcd.services;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.fromString;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_ACTIVE;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_ACTIVE_IN_ZONE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPECTED;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPECTED_IN_ZONE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING_IN_ZONE;
 
@@ -104,7 +106,7 @@ public class ZoneStorage {
 
   public CompletableFuture<List<String>> getActivePollerResourceIdsInZone(ResolvedZone zone) {
     final ByteSequence prefix =
-        buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
+        buildKey(FMT_ZONE_ACTIVE_IN_ZONE, zone.getTenantForKey(), zone.getZoneNameForKey());
 
     return getPollerResourceIdsInZone(prefix);
   }
@@ -130,7 +132,7 @@ public class ZoneStorage {
   public CompletableFuture<Map<String, String>> getEnvoyIdToResourceIdMap(
       ResolvedZone zone) {
     final ByteSequence prefix =
-        buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
+        buildKey(FMT_ZONE_EXPECTED_IN_ZONE, zone.getTenantForKey(), zone.getZoneNameForKey());
 
     return etcd.getKVClient().get(
         prefix,
@@ -275,12 +277,9 @@ public class ZoneStorage {
   }
 
   public CompletableFuture<List<String>> getExpiredPollerResourceIdsInZone(ResolvedZone zone) {
-    StringBuilder key = new StringBuilder(FMT_ZONE_EXPIRING_IN_ZONE);
-    if(StringUtils.isNotBlank(zone.getName())) {
-      key.append("/");
-    }
-    final ByteSequence prefix = buildKey(key.toString(), zone.getTenantForKey(),
-        zone.getZoneNameForKey());
+    final ByteSequence prefix =
+        buildKey(FMT_ZONE_EXPIRING_IN_ZONE, zone.getTenantForKey(), zone.getZoneNameForKey());
+
     return getPollerResourceIdsInZone(prefix);
   }
 
