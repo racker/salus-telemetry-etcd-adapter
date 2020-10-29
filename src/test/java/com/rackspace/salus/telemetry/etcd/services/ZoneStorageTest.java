@@ -19,12 +19,14 @@ package com.rackspace.salus.telemetry.etcd.services;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.fromString;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING;
 import static com.rackspace.salus.telemetry.etcd.types.ResolvedZone.createPrivateZone;
+import static com.rackspace.salus.telemetry.etcd.types.ResolvedZone.createPublicZone;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -43,6 +45,7 @@ import io.etcd.jetcd.options.LeaseOption;
 import io.etcd.jetcd.watch.WatchEvent;
 import io.etcd.jetcd.watch.WatchEvent.EventType;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -300,5 +303,30 @@ public class ZoneStorageTest {
   private void revokeLease(long leaseId) {
     client.getLeaseClient().revoke(leaseId).join();
 
+  }
+
+  @Test
+  public void testGetExpiringPollerResourceIdsInZone() throws InterruptedException {
+    ResolvedZone zone = createPrivateZone("t-1", RandomStringUtils.randomAlphabetic(10));
+    final String resourceId = RandomStringUtils.randomAlphabetic(10);
+    final String envoyId = RandomStringUtils.randomAlphabetic(10);
+    final long pollerTimeout = 1000;
+    final long leaseId = grantLease(pollerTimeout);
+
+    when(envoyLeaseTracking.grant(anyString(), anyLong()))
+        .thenReturn(CompletableFuture.completedFuture(leaseId));
+
+    zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout).join();
+    List<String> envoyList = zoneStorage.getExpiringPollerResourceIdsInZone(zone).join();
+
+    assertThat(envoyList, hasSize(1));
+    assertEquals(envoyList.get(0), resourceId.toLowerCase());
+
+    zone = createPublicZone(RandomStringUtils.randomAlphabetic(10));
+    zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout).join();
+    List<String> envoyListPublicZone = zoneStorage.getExpiringPollerResourceIdsInZone(zone).join();
+
+    assertThat(envoyListPublicZone, hasSize(1));
+    assertEquals(envoyListPublicZone.get(0), resourceId.toLowerCase());
   }
 }

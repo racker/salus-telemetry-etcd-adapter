@@ -19,8 +19,11 @@ package com.rackspace.salus.telemetry.etcd.services;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.buildKey;
 import static com.rackspace.salus.telemetry.etcd.EtcdUtils.fromString;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_ACTIVE;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_ACTIVE_IN_ZONE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPECTED;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPECTED_IN_ZONE;
 import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING;
+import static com.rackspace.salus.telemetry.etcd.types.Keys.FMT_ZONE_EXPIRING_IN_ZONE;
 
 import com.rackspace.salus.telemetry.etcd.types.EtcdStorageException;
 import com.rackspace.salus.telemetry.etcd.types.ResolvedZone;
@@ -50,6 +53,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import javax.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -102,23 +106,9 @@ public class ZoneStorage {
 
   public CompletableFuture<List<String>> getActivePollerResourceIdsInZone(ResolvedZone zone) {
     final ByteSequence prefix =
-        buildKey(FMT_ZONE_ACTIVE, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
+        buildKey(FMT_ZONE_ACTIVE_IN_ZONE, zone.getTenantForKey(), zone.getZoneNameForKey());
 
-    return etcd.getKVClient()
-        .get(
-            prefix,
-            GetOption.newBuilder()
-                .withPrefix(prefix)
-                .build()
-        )
-        .thenApply(getResponse ->
-            getResponse.getKvs().stream()
-                .map(kv -> {
-                  final String key = kv.getKey().toString(StandardCharsets.UTF_8);
-                  return key.substring(key.lastIndexOf("/") + 1);
-                })
-                .collect(Collectors.toList())
-        );
+    return getPollerResourceIdsInZone(prefix);
   }
 
   public CompletableFuture<Long> getActiveEnvoyCountForZone(ResolvedZone zone) {
@@ -142,7 +132,7 @@ public class ZoneStorage {
   public CompletableFuture<Map<String, String>> getEnvoyIdToResourceIdMap(
       ResolvedZone zone) {
     final ByteSequence prefix =
-        buildKey(FMT_ZONE_EXPECTED, zone.getTenantForKey(), zone.getZoneNameForKey(), "");
+        buildKey(FMT_ZONE_EXPECTED_IN_ZONE, zone.getTenantForKey(), zone.getZoneNameForKey());
 
     return etcd.getKVClient().get(
         prefix,
@@ -284,6 +274,31 @@ public class ZoneStorage {
 
   public Watch getWatchClient() {
     return etcd.getWatchClient();
+  }
+
+  public CompletableFuture<List<String>> getExpiringPollerResourceIdsInZone(ResolvedZone zone) {
+    final ByteSequence prefix =
+        buildKey(FMT_ZONE_EXPIRING_IN_ZONE, zone.getTenantForKey(), zone.getZoneNameForKey());
+
+    return getPollerResourceIdsInZone(prefix);
+  }
+
+  public CompletableFuture<List<String>> getPollerResourceIdsInZone(ByteSequence prefix) {
+    return etcd.getKVClient()
+        .get(
+            prefix,
+            GetOption.newBuilder()
+                .withPrefix(prefix)
+                .build()
+        )
+        .thenApply(getResponse ->
+            getResponse.getKvs().stream()
+                .map(kv -> {
+                  final String key = kv.getKey().toString(StandardCharsets.UTF_8);
+                  return key.substring(key.lastIndexOf("/") + 1);
+                })
+                .collect(Collectors.toList())
+        );
   }
 
   @PreDestroy
