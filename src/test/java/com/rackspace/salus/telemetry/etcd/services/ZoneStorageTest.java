@@ -306,7 +306,7 @@ public class ZoneStorageTest {
   }
 
   @Test
-  public void testGetExpiredPollerResourceIdsInZone() throws InterruptedException {
+  public void testGetExpiringPollerResourceIdsInZone() throws InterruptedException {
     ResolvedZone zone = createPrivateZone("t-1", RandomStringUtils.randomAlphabetic(10));
     final String resourceId = RandomStringUtils.randomAlphabetic(10);
     final String envoyId = RandomStringUtils.randomAlphabetic(10);
@@ -317,21 +317,21 @@ public class ZoneStorageTest {
         .thenReturn(CompletableFuture.completedFuture(leaseId));
 
     zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout).join();
-    List<String> envoyList = zoneStorage.getExpiredPollerResourceIdsInZone(zone).join();
+    List<String> envoyList = zoneStorage.getExpiringPollerResourceIdsInZone(zone).join();
 
     assertThat(envoyList, hasSize(1));
     assertEquals(envoyList.get(0), resourceId.toLowerCase());
 
     zone = createPublicZone(RandomStringUtils.randomAlphabetic(10));
     zoneStorage.createExpiringEntry(zone, resourceId, envoyId, pollerTimeout).join();
-    List<String> envoyListPublicZone = zoneStorage.getExpiredPollerResourceIdsInZone(zone).join();
+    List<String> envoyListPublicZone = zoneStorage.getExpiringPollerResourceIdsInZone(zone).join();
 
     assertThat(envoyListPublicZone, hasSize(1));
     assertEquals(envoyListPublicZone.get(0), resourceId.toLowerCase());
   }
 
   @Test
-  public void testGetExpiredPollerResourceIds_PerTenant_AllZones() {
+  public void testGetExpiringPollerResourceIds_PerTenant_AllZones() {
     ResolvedZone zone1 = createPrivateZone("t-1", RandomStringUtils.randomAlphabetic(10));
     ResolvedZone zone2 = createPrivateZone("t-1", RandomStringUtils.randomAlphabetic(10));
     final String resourceId1 = RandomStringUtils.randomAlphabetic(10);
@@ -346,7 +346,7 @@ public class ZoneStorageTest {
     zoneStorage.createExpiringEntry(zone1, resourceId1, envoyId, pollerTimeout).join();
     zoneStorage.createExpiringEntry(zone2, resourceId2, envoyId, pollerTimeout).join();
     ResolvedZone zoneAllTenants = createPrivateZone("t-1", "");
-    List<String> envoyList = zoneStorage.getExpiredPollerResourceIdsInZone(zoneAllTenants).join();
+    List<String> envoyList = zoneStorage.getExpiringPollerResourceIdsInZone(zoneAllTenants).join();
 
     assertThat(envoyList, hasSize(2));
     assertThat(envoyList, containsInAnyOrder(resourceId1.toLowerCase(), resourceId2.toLowerCase()));

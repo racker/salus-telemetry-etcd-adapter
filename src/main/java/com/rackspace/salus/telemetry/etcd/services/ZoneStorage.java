@@ -276,7 +276,7 @@ public class ZoneStorage {
     return etcd.getWatchClient();
   }
 
-  public CompletableFuture<List<String>> getExpiredPollerResourceIdsInZone(ResolvedZone zone) {
+  public CompletableFuture<List<String>> getExpiringPollerResourceIdsInZone(ResolvedZone zone) {
     final ByteSequence prefix =
         buildKey(FMT_ZONE_EXPIRING_IN_ZONE, zone.getTenantForKey(), zone.getZoneNameForKey());
 
